@@ -1,4 +1,5 @@
-﻿using System;
+﻿using GithubActionPinner.Core;
+using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,7 +29,8 @@ namespace GithubActionPinner
             Console.CancelKeyPress += (s, e) => cts.Cancel();
             try
             {
-                return await RunAsync(file, mode, cts.Token);
+                await RunAsync(file, mode, cts.Token);
+                return 0;
             }
             catch (Exception ex)
             {
@@ -37,75 +39,10 @@ namespace GithubActionPinner
             }
         }
 
-        private static async Task<int> RunAsync(string file, Mode mode, CancellationToken cancellationToken)
+        private static async Task RunAsync(string file, Mode mode, CancellationToken cancellationToken)
         {
-            // could parse file for validity but string manipulation is much easier #famousLastWords
-            var lines = await File.ReadAllLinesAsync(file, cancellationToken);
-            for (int i = 0; i < lines.Length; i++)
-            {
-                if (!HasActionReference(lines[i]))
-                    continue;
-
-                var info = await ParseActionAsync(new Line
-                {
-                    LineNumber = i + 1,
-                    Text = lines[i]
-                }, cancellationToken);
-                if (info.IsDocker || !info.IsPublic)
-                    continue;
-
-                if (info.Pinned.HasValue)
-                {
-                    var currentSha = info.Sha;
-                    if (info.Pinned.Value.VersionReferenceType == ActionVersionReferenceType.Tag)
-                    {
-                        // update can be:
-                        //  - same version but different SHA
-                        //  - new minor version
-                        var currentVersion = info.Pinned.Value.Version;
-                    }
-                }
-                else if (info.VersionReferenceType != ActionVersionReferenceType.SHA)
-                {
-                    // never pinned before and not a SHA -> pin @current
-                }
-            }
-            return 0;
-        }
-
-        private static Task<dynamic> ParseActionAsync(Line line, CancellationToken cancellationToken)
-        {
-            // expected format: "  - uses: action/foo@<version> [# comment]"
-            var text = line.Text.Trim();
-            if (!text.StartsWith("- uses:"))
-                throw new NotSupportedException($"Action references must start with '- uses:', line ({line.LineNumber}) {line.Text} is invalid");
-            var remainder = text.Substring("- uses:".Length).TrimStart();
-            string actionRef = remainder;
-            string? comment;
-            var idx = remainder.IndexOf('#');
-            if (idx > -1)
-            {
-                actionRef = remainder.Substring(idx);
-                comment = remainder.Substring(idx + 1);
-            }
-            return null;
-        }
-
-        private static bool HasActionReference(string line)
-            => line.Trim().Contains("- uses:");
-
-        private struct Line
-        {
-            public int LineNumber { get; set; }
-
-            public string Text { get; set; }
-        }
-
-        private enum Mode
-        {
-            Unknown = 0,
-            Update,
-            Check
+            var processor = new WorkflowActionProcessor();
+            await processor.ProcessAsync(file, mode == Mode.Update, cancellationToken);
         }
     }
 }
