@@ -9,20 +9,26 @@ namespace GithubActionPinner
     {
         public static async Task<int> Main(string[] args)
         {
-            if (args.Length != 1 || !File.Exists(args[0]))
+            if (args.Length != 2 || !File.Exists(args[1]))
             {
                 Console.WriteLine("Usage:");
                 Console.WriteLine("[yml-file-path]");
                 Console.WriteLine("Will scan the yml file for Github actions that can be pinned to their respective SHA or updated to a newer version.");
                 return -1;
             }
-            var file = args[0];
+            var mode = args[0].ToLowerInvariant() switch
+            {
+                "update" => Mode.Update,
+                "check" => Mode.Check,
+                _ => Mode.Unknown
+            };
+            var file = args[1];
 
             var cts = new CancellationTokenSource();
             Console.CancelKeyPress += (s, e) => cts.Cancel();
             try
             {
-                return await RunAsync(file, cts.Token);
+                return await RunAsync(file, mode, cts.Token);
             }
             catch (Exception ex)
             {
@@ -31,7 +37,7 @@ namespace GithubActionPinner
             }
         }
 
-        private static async Task<int> RunAsync(string file, CancellationToken cancellationToken)
+        private static async Task<int> RunAsync(string file, Mode mode, CancellationToken cancellationToken)
         {
             // could parse file for validity but string manipulation is much easier #famousLastWords
             var lines = await File.ReadAllLinesAsync(file, cancellationToken);
@@ -93,6 +99,13 @@ namespace GithubActionPinner
             public int LineNumber { get; set; }
 
             public string Text { get; set; }
+        }
+
+        private enum Mode
+        {
+            Unknown = 0,
+            Update,
+            Check
         }
     }
 }
