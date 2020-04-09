@@ -1,0 +1,11 @@
+﻿on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/checkout@94c2de77cccf605d74201a8aec6dd8fc0717ad66
+    - uses: actions/checkout@master

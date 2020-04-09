@@ -1,0 +1,31 @@
+﻿on:
+  push:
+    bran
+ches:
+      - master
+
+env:
+  SemVer: 1.0.0
+  Project: GithubActionStats
+
+jobs:
+  buil
+d:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+    - uses: action
+s/checkout@v2
+    - uses: actions/setup-dotnet@v1# random comment
+      with:
+        dotnet-version: 3.1.100
+    - run: echo "::set-env name=Version::${{ env.SemVer }}.${{ GITHUB.RUN_NUMBER }}"
+    - run: dotnet build -c Release
+    - run: dotnet test --no-build -c Release
+    - run: dotnet publish --no-build -c Release ${{ env.Project }}/${{ env.Project }}.csproj -o release/${{ env.Project }} /p:Version=${{ env.Version }}
+    - uses: actions/upload-artifact@v1
+      with:
+        name: ${{ matrix.os }}
+        path: release/${{ env.Project }}

@@ -1,4 +1,6 @@
-﻿using System.IO;
+﻿using Microsoft.Extensions.Logging;
+using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -6,6 +8,11 @@ namespace GithubActionPinner.Core
 {
     public class WorkflowActionProcessor
     {
+        private readonly ILogger _logger;
+
+        public WorkflowActionProcessor(ILogger logger)
+            => _logger = logger;
+
         public async Task ProcessAsync(string file, bool update, CancellationToken cancellationToken)
         {
             // could parse file for validity but string manipulation is much easier #famousLastWords
@@ -16,7 +23,15 @@ namespace GithubActionPinner.Core
                 if (!HasActionReference(lines[i]))
                     continue;
 
-                var info = parser.ParseAction(lines[i]);
+                try
+                {
+                    var info = parser.ParseAction(lines[i]);
+                }
+                catch (NotSupportedException ex)
+                {
+                    _logger.LogWarning($"Skipping invalid line #{i}: {ex.Message}");
+                    continue;
+                }
                 //if (info.IsDocker || !info.IsPublic)
                 //    continue;
 

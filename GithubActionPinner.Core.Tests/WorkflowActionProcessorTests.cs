@@ -1,4 +1,6 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
 using System;
 using System.IO;
 using System.Reflection;
@@ -15,7 +17,41 @@ namespace GithubActionPinner.Core.Tests
         {
             using var tmp = ExtractDataFileTemporarily("test.yml");
 
-            var processor = new WorkflowActionProcessor();
+            var processor = new WorkflowActionProcessor(new Mock<ILogger>().Object);
+            try
+            {
+                await processor.ProcessAsync(tmp.Data, false, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                Assert.Fail("should not throw");
+            }
+        }
+
+        [TestMethod]
+        public async Task InvalidYmlFileShouldIgnoreInvalidLinesButParseSuccessfully()
+        {
+            using var tmp = ExtractDataFileTemporarily("invalid-but-parsable.yml");
+
+            var mock = new Mock<ILogger>();
+            var processor = new WorkflowActionProcessor(mock.Object);
+            try
+            {
+                await processor.ProcessAsync(tmp.Data, false, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                Assert.Fail("should not throw");
+            }
+        }
+
+        [TestMethod]
+        public async Task YmlWithAllReferenceTypesShouldParseSuccessfully()
+        {
+            using var tmp = ExtractDataFileTemporarily("all-reference-types.yml");
+
+            var mock = new Mock<ILogger>();
+            var processor = new WorkflowActionProcessor(mock.Object);
             try
             {
                 await processor.ProcessAsync(tmp.Data, false, CancellationToken.None);
