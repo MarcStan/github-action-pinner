@@ -10,7 +10,7 @@ namespace GithubActionStats.Core.Tests
         [DataTestMethod]
         [DataRow("  - uses: action/foo@v1", "action/foo", ActionReferenceType.Tag, "v1", "")]
         [DataRow("- uses: action/foo@v2", "action/foo", ActionReferenceType.Tag, "v2", "")]
-        [DataRow("          \t         \t- uses: action/foo@v2", "action/foo          \t              ", ActionReferenceType.Tag, "v2", "")]
+        [DataRow("          \t         \t- uses: action/foo@v2          \t              ", "action/foo", ActionReferenceType.Tag, "v2", "")]
         [DataRow("  - uses: action/foo@v1.1", "action/foo", ActionReferenceType.Tag, "v1.1", "")]
         [DataRow("  - uses: action/foo@master", "action/foo", ActionReferenceType.Branch, "master", "")]
         [DataRow("  - uses: action/foo@dev", "action/foo", ActionReferenceType.Branch, "dev", "")]
