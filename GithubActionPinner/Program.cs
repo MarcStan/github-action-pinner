@@ -45,7 +45,8 @@ namespace GithubActionPinner
         {
             var services = new ServiceCollection()
                 .AddLogging(builder => builder.AddConsole())
-                .AddTransient<WorkflowActionProcessor>();
+                .AddTransient<WorkflowActionProcessor>()
+                .AddTransient<IGithubRepositoryBrowser, GithubRepositoryBrowser>();
 
             using (var sp = services.BuildServiceProvider())
             {

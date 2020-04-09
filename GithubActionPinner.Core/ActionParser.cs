@@ -45,12 +45,16 @@ namespace GithubActionPinner.Core
                 type = ActionReferenceType.Branch;
             }
             actionRef = actionRef.Substring(0, idx);
+            // can either be "action/foo" or "action/subdir/subdir../foo" -> repo is 
+            var parts = actionRef.Split('/');
+            string repo = parts.Length != 2 ? parts[0] + "/" + parts[1] : actionRef;
             return new ActionReference
             {
                 ActionName = actionRef,
                 Comment = comment,
                 ReferenceType = type,
-                ReferenceVersion = version
+                ReferenceVersion = version,
+                Repository = repo
             };
         }
 

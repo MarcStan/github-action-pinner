@@ -17,7 +17,8 @@ namespace GithubActionPinner.Core.Tests
         {
             using var tmp = ExtractDataFileTemporarily("test.yml");
 
-            var processor = new WorkflowActionProcessor(new Mock<ILogger>().Object);
+            var repo = new Mock<IGithubRepositoryBrowser>();
+            var processor = new WorkflowActionProcessor(repo.Object, new Mock<ILogger<WorkflowActionProcessor>>().Object);
             try
             {
                 await processor.ProcessAsync(tmp.Data, false, CancellationToken.None);
@@ -33,8 +34,9 @@ namespace GithubActionPinner.Core.Tests
         {
             using var tmp = ExtractDataFileTemporarily("invalid-but-parsable.yml");
 
-            var mock = new Mock<ILogger>();
-            var processor = new WorkflowActionProcessor(mock.Object);
+            var mock = new Mock<ILogger<WorkflowActionProcessor>>();
+            var repo = new Mock<IGithubRepositoryBrowser>();
+            var processor = new WorkflowActionProcessor(repo.Object, mock.Object);
             try
             {
                 await processor.ProcessAsync(tmp.Data, false, CancellationToken.None);
@@ -50,8 +52,9 @@ namespace GithubActionPinner.Core.Tests
         {
             using var tmp = ExtractDataFileTemporarily("all-reference-types.yml");
 
-            var mock = new Mock<ILogger>();
-            var processor = new WorkflowActionProcessor(mock.Object);
+            var mock = new Mock<ILogger<WorkflowActionProcessor>>();
+            var repo = new Mock<IGithubRepositoryBrowser>();
+            var processor = new WorkflowActionProcessor(repo.Object, mock.Object);
             try
             {
                 await processor.ProcessAsync(tmp.Data, false, CancellationToken.None);

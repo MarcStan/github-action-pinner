@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using GithubActionPinner.Core.Models;
+using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Threading;
@@ -9,9 +10,15 @@ namespace GithubActionPinner.Core
     public class WorkflowActionProcessor
     {
         private readonly ILogger _logger;
+        private readonly IGithubRepositoryBrowser _githubRepositoryBrowser;
 
-        public WorkflowActionProcessor(ILogger logger)
-            => _logger = logger;
+        public WorkflowActionProcessor(
+            IGithubRepositoryBrowser githubRepositoryBrowser,
+            ILogger<WorkflowActionProcessor> logger)
+        {
+            _githubRepositoryBrowser = githubRepositoryBrowser;
+            _logger = logger;
+        }
 
         public async Task ProcessAsync(string file, bool update, CancellationToken cancellationToken)
         {
@@ -23,33 +30,96 @@ namespace GithubActionPinner.Core
                 if (!HasActionReference(lines[i]))
                     continue;
 
+                ActionReference actionReference;
                 try
                 {
-                    var info = parser.ParseAction(lines[i]);
+                    actionReference = parser.ParseAction(lines[i]);
                 }
                 catch (NotSupportedException ex)
                 {
                     _logger.LogWarning($"Skipping invalid line #{i}: {ex.Message}");
                     continue;
                 }
-                //if (info.IsDocker || !info.IsPublic)
-                //    continue;
+                if (actionReference.ActionName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase))
+                {
+                    // don't support docker for now
+                    continue;
+                }
 
-                //if (info.Pinned.HasValue)
-                //{
-                //    var currentSha = info.Sha;
-                //    if (info.Pinned.Value.VersionReferenceType == ActionVersionReferenceType.Tag)
-                //    {
-                //        // update can be:
-                //        //  - same version but different SHA
-                //        //  - new minor version
-                //        var currentVersion = info.Pinned.Value.Version;
-                //    }
-                //}
-                //else if (info.VersionReferenceType != ActionVersionReferenceType.SHA)
-                //{
-                //    // never pinned before and not a SHA -> pin @current
-                //}
+                Func<CancellationToken, Task<(string, string)?>> resolver;
+                if (actionReference.Pinned == null)
+                {
+                    if (actionReference.ReferenceType != ActionReferenceType.Sha)
+                    {
+                        // never pinned before and not a SHA -> pin @current
+                        if (actionReference.ReferenceType == ActionReferenceType.Tag)
+                        {
+                            var tag = actionReference.ReferenceVersion;
+                            resolver = async (token) => await _githubRepositoryBrowser.GetShaForLatestSemVerCompliantCommitAsync(actionReference.Repository, tag, token);
+                        }
+                        else if (actionReference.ReferenceType == ActionReferenceType.Branch)
+                        {
+                            var branchName = actionReference.ReferenceVersion;
+                            resolver = async (token) => (await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Repository, branchName, token), branchName);
+                        }
+                        else
+                        {
+                            throw new NotSupportedException($"Unsupported pinned version {actionReference.ReferenceVersion}");
+                        }
+                    }
+                    else
+                    {
+                        // SHA pinned but no reference
+                        _logger.LogInformation($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is not pinned. Cannot determine version, switch to a version or add a comment '# @<version>'");
+                        continue;
+                    }
+                }
+                else
+                {
+                    // must be SHA
+                    var currentSha = actionReference.ReferenceVersion;
+                    if (actionReference.Pinned.ReferenceType == ActionReferenceType.Tag)
+                    {
+                        // update can be:
+                        //  - same version but different SHA
+                        //  - new minor version
+                        var currentVersion = actionReference.Pinned.ReferenceVersion;
+
+                        resolver = async (token) => await _githubRepositoryBrowser.GetShaForLatestSemVerCompliantCommitAsync(actionReference.Repository, currentVersion, token);
+                    }
+                    else if (actionReference.Pinned.ReferenceType == ActionReferenceType.Branch)
+                    {
+                        var branchName = actionReference.Pinned.ReferenceVersion;
+                        // find latest on branch and pin it
+                        resolver = async (token) => (await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Repository, branchName, token), branchName);
+                    }
+                    else
+                    {
+                        throw new NotSupportedException($"Unsupported pinned version {actionReference.Pinned.ReferenceVersion}");
+                    }
+                }
+
+                if (!await _githubRepositoryBrowser.IsPublicAsync(actionReference.Repository, cancellationToken))
+                {
+                    // cannot pin private repos, so skip
+                    _logger.LogWarning($"Could not find action {actionReference.ActionName}, repo is private or removed. Skipping..");
+                    continue;
+                }
+                var response = await resolver(cancellationToken);
+                if (response == null)
+                {
+                    _logger.LogTrace($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is already up to date");
+                }
+                else
+                {
+                    var (tag, detail) = response.Value;
+                    if (update)
+                    {
+                        _logger.LogInformation($"Updated action '{actionReference.ActionName}@{actionReference.Pinned?.ReferenceVersion ?? actionReference.ReferenceVersion}' to {tag} ({detail})");
+                    }
+                    else
+                        _logger.LogInformation($"Action '{actionReference.ActionName}@{actionReference.Pinned?.ReferenceVersion ?? actionReference.ReferenceVersion}' can be updated to {tag} ({detail})");
+                }
             }
         }
 
