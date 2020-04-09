@@ -1,4 +1,6 @@
 ﻿using GithubActionPinner.Core;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Threading;
@@ -41,8 +43,15 @@ namespace GithubActionPinner
 
         private static async Task RunAsync(string file, Mode mode, CancellationToken cancellationToken)
         {
-            var processor = new WorkflowActionProcessor();
-            await processor.ProcessAsync(file, mode == Mode.Update, cancellationToken);
+            var services = new ServiceCollection()
+                .AddLogging(builder => builder.AddConsole())
+                .AddTransient<WorkflowActionProcessor>();
+
+            using (var sp = services.BuildServiceProvider())
+            {
+                var processor = sp.GetRequiredService<WorkflowActionProcessor>();
+                await processor.ProcessAsync(file, mode == Mode.Update, cancellationToken);
+            }
         }
     }
 }
