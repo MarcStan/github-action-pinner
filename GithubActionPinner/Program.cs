@@ -52,7 +52,7 @@ namespace GithubActionPinner
             var token = configuration["token"];
 
             var services = new ServiceCollection()
-                .AddLogging(builder => builder.AddConsole())
+                .AddLogging(builder => builder.AddProvider(new ConsoleLoggerProvider()))
                 .AddTransient<WorkflowActionProcessor>()
                 .AddSingleton(_ => (IGithubRepositoryBrowser)new GithubRepositoryBrowser(token));
 

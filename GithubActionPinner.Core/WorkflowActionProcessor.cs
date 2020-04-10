@@ -91,7 +91,7 @@ namespace GithubActionPinner.Core
                     {
                         var branchName = actionReference.Pinned.ReferenceVersion;
                         // find latest on branch and pin it
-                        resolver = async (token) => (await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token), branchName);
+                        resolver = async (token) => (branchName, await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token));
                     }
                     else
                     {
@@ -108,19 +108,35 @@ namespace GithubActionPinner.Core
                 var response = await resolver(cancellationToken);
                 if (response == null)
                 {
-                    _logger.LogTrace($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is already up to date");
+                    _logger.LogTrace($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is already up to date.");
                 }
                 else
                 {
-                    var (tag, detail) = response.Value;
+                    var (tagOrBranch, sha) = response.Value;
+                    var existingRef = actionReference.Pinned?.ReferenceVersion ?? actionReference.ReferenceVersion;
+                    var desired = $"{existingRef} -> {tagOrBranch}";
+                    if (existingRef == tagOrBranch)
+                    {
+                        // update like v1 -> v1 or master -> master look confusing
+                        // show the underlying sha change instead
+                        desired = $"{existingRef} (new SHA {sha})";
+                    }
                     if (update)
                     {
-                        _logger.LogInformation($"Updated action '{actionReference.ActionName}@{actionReference.Pinned?.ReferenceVersion ?? actionReference.ReferenceVersion}' to {tag} ({detail})");
+                        lines[i] = UpdateLine(lines[i], actionReference);
+                        _logger.LogInformation($"(Line {i + 1}): Updated action '{actionReference.ActionName}' {desired}.");
                     }
                     else
-                        _logger.LogInformation($"Action '{actionReference.ActionName}@{actionReference.Pinned?.ReferenceVersion ?? actionReference.ReferenceVersion}' can be updated to {tag} ({detail})");
+                    {
+                        _logger.LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' can be updated: {desired}.");
+                    }
                 }
             }
+        }
+
+        private string UpdateLine(string line, ActionReference actionReference)
+        {
+            return line;
         }
 
         private static bool HasActionReference(string line)
