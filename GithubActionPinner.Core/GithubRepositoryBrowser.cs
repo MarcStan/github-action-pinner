@@ -36,8 +36,7 @@ namespace GithubActionPinner.Core
             if (!tag.StartsWith("v", StringComparison.OrdinalIgnoreCase))
                 throw new NotSupportedException($"Unsupported version tag {tag}");
 
-            // format "v1" is mainly used to reference github Actions but is not compatible with .Net Version so parse to "1.0"
-            if (!Version.TryParse(int.TryParse(tag.Substring(1), out int major) ? $"{major}.0" : tag.Substring(1), out var version))
+            if (!VersionHelper.TryParse(tag, out var version))
                 throw new NotSupportedException($"Unsupported version tag {tag} (not a parsable version)");
 
             var versions = await GetLargerSemVerCompliantTagsAsync(version, cancellationToken);

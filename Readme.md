@@ -78,6 +78,12 @@ This tool aims to solve the problem by providing a commandline interface to upda
 ___
 Alternative (not recommended) reference styles:
 
+## `no reference` ❌
+
+While technically possible he [official documention](https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idstepsuses) also discourages this.
+
+If no reference is used the latest version of the default branch is used (see below).
+
 ## `@<branch> (@master, @develop)` ❌ (consider using it only when developing actions)
 
 This will reference a branch (and always use the latest commit on it). A convenient way to develop your own action (gain rapid feedback without having to update the test repository each time) but not recommend to use otherwise as any small change on the branch can lead to build breakage.
