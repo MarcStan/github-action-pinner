@@ -1,7 +1,9 @@
 ﻿using GithubActionPinner.Core;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,26 +14,18 @@ namespace GithubActionPinner
     {
         public static async Task<int> Main(string[] args)
         {
-            if (args.Length != 2 || !File.Exists(args[1]))
-            {
-                Console.WriteLine("Usage:");
-                Console.WriteLine("[yml-file-path]");
-                Console.WriteLine("Will scan the yml file for Github actions that can be pinned to their respective SHA or updated to a newer version.");
-                return -1;
-            }
-            var mode = args[0].ToLowerInvariant() switch
-            {
-                "update" => Mode.Update,
-                "check" => Mode.Check,
-                _ => Mode.Unknown
-            };
-            var file = args[1];
-
             var cts = new CancellationTokenSource();
             Console.CancelKeyPress += (s, e) => cts.Cancel();
+
+            var configuration = new ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .AddCommandLine(args)
+                .Build();
+
+            Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
             try
             {
-                await RunAsync(file, mode, cts.Token);
+                await RunAsync(configuration, cts.Token);
                 return 0;
             }
             catch (Exception ex)
@@ -41,12 +35,26 @@ namespace GithubActionPinner
             }
         }
 
-        private static async Task RunAsync(string file, Mode mode, CancellationToken cancellationToken)
+        private static async Task RunAsync(IConfiguration configuration, CancellationToken cancellationToken)
         {
+            var update = configuration["update"];
+            var check = configuration["check"];
+            if ((update == null && check == null) ||
+                (update != null && check != null))
+                throw new ArgumentException("Either --update or --check must be set");
+
+            var mode = update != null ? Mode.Update : Mode.Check;
+            var file = update ?? check ?? throw new InvalidProgramException("compiler not smart");
+
+            if (!File.Exists(file))
+                throw new ArgumentException($"File '{file}' not found.");
+
+            var token = configuration["token"];
+
             var services = new ServiceCollection()
                 .AddLogging(builder => builder.AddConsole())
                 .AddTransient<WorkflowActionProcessor>()
-                .AddSingleton(_ => (IGithubRepositoryBrowser)new GithubRepositoryBrowser(null));
+                .AddSingleton(_ => (IGithubRepositoryBrowser)new GithubRepositoryBrowser(token));
 
             using (var sp = services.BuildServiceProvider())
             {

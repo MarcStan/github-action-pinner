@@ -24,14 +24,14 @@ steps:
 
 # Usage
 
-> GithubActionPinner update /path/to/workflow.yml
+> GithubActionPinner --update /path/to/workflow.yml
 
 This will scan the action yml for all actions and update them to use the respective SHA.
 
 * for branch/tag references it will use the current underlying SHA
 * for SHA references it will only update them if it finds a comment "`# @v1`" or similar next to it
 
-> GithubActionPinner check /path/to/workflow.yml
+> GithubActionPinner --check /path/to/workflow.yml
 
 This will only check for updates and print them on the console. The yml will not be modified
 
