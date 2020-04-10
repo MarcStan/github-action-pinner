@@ -7,9 +7,28 @@ namespace GithubActionPinner.Core
 {
     public class GithubRepositoryBrowser : IGithubRepositoryBrowser
     {
-        public Task<bool> IsPublicAsync(string repository, CancellationToken cancellationToken)
+        private readonly HttpClient _httpClient;
+
+        public GithubRepositoryBrowser(string? oauthToken)
         {
-            throw new NotImplementedException();
+            _httpClient = new HttpClient
+            {
+                BaseAddress = new Uri("https://api.github.com/")
+            };
+            // https://developer.github.com/v3/#current-version
+            _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github.v3+json"));
+            // https://developer.github.com/v3/#user-agent-required
+            _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("GithubActionPinner", "v1"));
+            if (oauthToken != null)
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", oauthToken);
+        }
+
+        public async Task<bool> IsPublicAsync(string owner, string repository, CancellationToken cancellationToken)
+        {
+            var response = await _httpClient.GetAsync($"repos/{owner}/{repository}", cancellationToken);
+
+            // if not found either does not exist or private; can't tell and don't care
+            return response.StatusCode == System.Net.HttpStatusCode.OK;
         }
 
         /// <summary>
