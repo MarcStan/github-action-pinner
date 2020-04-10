@@ -2,6 +2,8 @@
 {
     public class ActionReference : ActionVersion
     {
+        public string Owner { get; set; } = "";
+
         public string Repository { get; set; } = "";
 
         public string ActionName { get; set; } = "";

@@ -5,12 +5,12 @@ namespace GithubActionPinner.Core
 {
     public interface IGithubRepositoryBrowser
     {
-        Task<bool> IsPublicAsync(string repository, CancellationToken cancellationToken);
+        Task<bool> IsPublicAsync(string owner, string repository, CancellationToken cancellationToken);
 
         /// <summary>
         /// For a given branch name gets the SHA of the latest commit on it.
         /// </summary>
-        Task<string> GetShaForLatestCommitAsync(string repository, string branchName, CancellationToken cancellationToken);
+        Task<string> GetShaForLatestCommitAsync(string owner, string repository, string branchName, CancellationToken cancellationToken);
 
         /// <summary>
         /// For a tag of a given major version this will look for the latest SemVer compliant tag and return its current SHA.
@@ -23,6 +23,6 @@ namespace GithubActionPinner.Core
         /// Will list all tags and finds tag v1 is on a newer commit -> returns its sha
         /// Will list all tags and finds tag v1 and v1.2 (v1 is on a newer commit) -> returns its sha
         /// </example>
-        Task<(string tag, string sha)?> GetShaForLatestSemVerCompliantCommitAsync(string repository, string tag, CancellationToken cancellationToken);
+        Task<(string tag, string sha)?> GetShaForLatestSemVerCompliantCommitAsync(string owner, string repository, string tag, CancellationToken cancellationToken);
     }
 }

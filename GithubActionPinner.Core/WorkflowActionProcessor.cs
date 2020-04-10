@@ -55,12 +55,12 @@ namespace GithubActionPinner.Core
                         if (actionReference.ReferenceType == ActionReferenceType.Tag)
                         {
                             var tag = actionReference.ReferenceVersion;
-                            resolver = async (token) => await _githubRepositoryBrowser.GetShaForLatestSemVerCompliantCommitAsync(actionReference.Repository, tag, token);
+                            resolver = async (token) => await _githubRepositoryBrowser.GetShaForLatestSemVerCompliantCommitAsync(actionReference.Owner, actionReference.Repository, tag, token);
                         }
                         else if (actionReference.ReferenceType == ActionReferenceType.Branch)
                         {
                             var branchName = actionReference.ReferenceVersion;
-                            resolver = async (token) => (await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Repository, branchName, token), branchName);
+                            resolver = async (token) => (await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token), branchName);
                         }
                         else
                         {
@@ -85,13 +85,13 @@ namespace GithubActionPinner.Core
                         //  - new minor version
                         var currentVersion = actionReference.Pinned.ReferenceVersion;
 
-                        resolver = async (token) => await _githubRepositoryBrowser.GetShaForLatestSemVerCompliantCommitAsync(actionReference.Repository, currentVersion, token);
+                        resolver = async (token) => await _githubRepositoryBrowser.GetShaForLatestSemVerCompliantCommitAsync(actionReference.Owner, actionReference.Repository, currentVersion, token);
                     }
                     else if (actionReference.Pinned.ReferenceType == ActionReferenceType.Branch)
                     {
                         var branchName = actionReference.Pinned.ReferenceVersion;
                         // find latest on branch and pin it
-                        resolver = async (token) => (await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Repository, branchName, token), branchName);
+                        resolver = async (token) => (await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token), branchName);
                     }
                     else
                     {
@@ -99,7 +99,7 @@ namespace GithubActionPinner.Core
                     }
                 }
 
-                if (!await _githubRepositoryBrowser.IsPublicAsync(actionReference.Repository, cancellationToken))
+                if (!await _githubRepositoryBrowser.IsPublicAsync(actionReference.Owner, actionReference.Repository, cancellationToken))
                 {
                     // cannot pin private repos, so skip
                     _logger.LogWarning($"Could not find action {actionReference.ActionName}, repo is private or removed. Skipping..");

@@ -4,6 +4,9 @@ using System.Linq;
 
 namespace GithubActionPinner.Core
 {
+    /// <summary>
+    /// Helper that parses yml file action references into an object model.
+    /// </summary>
     public class ActionParser
     {
         public ActionReference ParseAction(string text)
@@ -35,6 +38,7 @@ namespace GithubActionPinner.Core
                 type = ActionReferenceType.Tag;
             }
             // SHA-1: 40, SHA256: 64 characters, all hex
+            // TODO: are short SHA ids also supported?
             else if ((version.Length == 40 || version.Length == 64) &&
                 IsHex(version))
             {
@@ -45,16 +49,18 @@ namespace GithubActionPinner.Core
                 type = ActionReferenceType.Branch;
             }
             actionRef = actionRef.Substring(0, idx);
-            // can either be "action/foo" or "action/subdir/subdir../foo" -> repo is 
+            // can either be "owner/repo" or "owner/repo/subdir../foo" -> owner is first, repo second
             var parts = actionRef.Split('/');
-            string repo = parts.Length != 2 ? parts[0] + "/" + parts[1] : actionRef;
+            string owner = parts[0];
+            string repo = parts[1];
             return new ActionReference
             {
                 ActionName = actionRef,
                 Comment = comment,
                 ReferenceType = type,
                 ReferenceVersion = version,
-                Repository = repo
+                Owner = owner,
+                Repository = repo,
             };
         }
 

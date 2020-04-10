@@ -15,7 +15,7 @@ namespace GithubActionPinner.Core
         /// <summary>
         /// For a given branch name gets the SHA of the latest commit on it.
         /// </summary>
-        public Task<string> GetShaForLatestCommitAsync(string repository, string branchName, CancellationToken cancellationToken)
+        public Task<string> GetShaForLatestCommitAsync(string owner, string repository, string branchName, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
@@ -31,7 +31,7 @@ namespace GithubActionPinner.Core
         /// Will list all tags and finds tag v1 is on a newer commit -> returns its sha
         /// Will list all tags and finds tag v1 and v1.2 (v1 is on a newer commit) -> returns its sha
         /// </example>
-        public async Task<(string tag, string sha)?> GetShaForLatestSemVerCompliantCommitAsync(string repository, string tag, CancellationToken cancellationToken)
+        public async Task<(string tag, string sha)?> GetShaForLatestSemVerCompliantCommitAsync(string owner, string repository, string tag, CancellationToken cancellationToken)
         {
             if (!tag.StartsWith("v", StringComparison.OrdinalIgnoreCase))
                 throw new NotSupportedException($"Unsupported version tag {tag}");
@@ -46,7 +46,7 @@ namespace GithubActionPinner.Core
             return null;
         }
 
-        private Task<(string tag, string sha)[]> GetLargerSemVerCompliantTagsAsync(Version version, CancellationToken cancellationToken)
+        private async Task<(string sha, DateTimeOffset createdAt)> GetCommitAsync(string owner, string repository, GitRef gitRef, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
