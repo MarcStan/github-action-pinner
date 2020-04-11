@@ -35,7 +35,13 @@ namespace GithubActionPinner.Core.Tests
                 .Setup(x => x.GetShaForLatestCommitAsync(owner, repo, latestVersion, It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(latestSha));
 
-            var processor = new WorkflowActionProcessor(repoBrowser.Object, new Mock<ILogger<WorkflowActionProcessor>>().Object);
+            // only makes sense if a branch is referenced
+            repoBrowser
+                .Setup(x => x.GetRepositoryDefaultBranchAsync(owner, repo, It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult(latestVersion));
+
+            var parser = new ActionParser(repoBrowser.Object);
+            var processor = new WorkflowActionProcessor(repoBrowser.Object, parser, new Mock<ILogger<WorkflowActionProcessor>>().Object);
             try
             {
                 await processor.ProcessAsync(tmp.Data, true, CancellationToken.None);
@@ -60,9 +66,16 @@ namespace GithubActionPinner.Core.Tests
             repoBrowser.Verify(x => x.IsRepositoryAccessibleAsync(owner, repo, It.IsAny<CancellationToken>()), Times.Once);
             // can be tag or branch
             if (!string.IsNullOrEmpty(currentVersion) && VersionHelper.TryParse(currentVersion, out _))
+            {
                 repoBrowser.Verify(x => x.GetLatestSemVerCompliantAsync(owner, repo, currentVersion, It.IsAny<CancellationToken>()), Times.Once);
+                // tags shouldn't query default branch
+                repoBrowser.Verify(x => x.GetRepositoryDefaultBranchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+            }
             else
+            {
                 repoBrowser.Verify(x => x.GetShaForLatestCommitAsync(owner, repo, latestVersion, It.IsAny<CancellationToken>()), Times.Once);
+                repoBrowser.Verify(x => x.GetRepositoryDefaultBranchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+            }
         }
 
         [DataTestMethod]
@@ -84,7 +97,8 @@ namespace GithubActionPinner.Core.Tests
                 .Setup(x => x.GetShaForLatestCommitAsync(owner, repo, latestVersion, It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(latestSha));
 
-            var processor = new WorkflowActionProcessor(repoBrowser.Object, new Mock<ILogger<WorkflowActionProcessor>>().Object);
+            var parser = new ActionParser(repoBrowser.Object);
+            var processor = new WorkflowActionProcessor(repoBrowser.Object, parser, new Mock<ILogger<WorkflowActionProcessor>>().Object);
             try
             {
                 await processor.ProcessAsync(tmp.Data, true, CancellationToken.None);
@@ -119,11 +133,12 @@ namespace GithubActionPinner.Core.Tests
         {
             using var tmp = ExtractDataFileTemporarily("test.yml");
 
-            var repo = new Mock<IGithubRepositoryBrowser>();
-            repo
+            var repoBrowser = new Mock<IGithubRepositoryBrowser>();
+            repoBrowser
                 .Setup(x => x.IsRepositoryAccessibleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(true));
-            var processor = new WorkflowActionProcessor(repo.Object, new Mock<ILogger<WorkflowActionProcessor>>().Object);
+            var parser = new ActionParser(repoBrowser.Object);
+            var processor = new WorkflowActionProcessor(repoBrowser.Object, parser, new Mock<ILogger<WorkflowActionProcessor>>().Object);
             try
             {
                 await processor.ProcessAsync(tmp.Data, false, CancellationToken.None);
@@ -140,11 +155,12 @@ namespace GithubActionPinner.Core.Tests
             using var tmp = ExtractDataFileTemporarily("invalid-but-parsable.yml");
 
             var mock = new Mock<ILogger<WorkflowActionProcessor>>();
-            var repo = new Mock<IGithubRepositoryBrowser>();
-            repo
+            var repoBrowser = new Mock<IGithubRepositoryBrowser>();
+            repoBrowser
                 .Setup(x => x.IsRepositoryAccessibleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(true));
-            var processor = new WorkflowActionProcessor(repo.Object, mock.Object);
+            var parser = new ActionParser(repoBrowser.Object);
+            var processor = new WorkflowActionProcessor(repoBrowser.Object, parser, mock.Object);
             try
             {
                 await processor.ProcessAsync(tmp.Data, false, CancellationToken.None);
@@ -161,11 +177,12 @@ namespace GithubActionPinner.Core.Tests
             using var tmp = ExtractDataFileTemporarily("all-reference-types.yml");
 
             var mock = new Mock<ILogger<WorkflowActionProcessor>>();
-            var repo = new Mock<IGithubRepositoryBrowser>();
-            repo
+            var repoBrowser = new Mock<IGithubRepositoryBrowser>();
+            repoBrowser
                 .Setup(x => x.IsRepositoryAccessibleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(true));
-            var processor = new WorkflowActionProcessor(repo.Object, mock.Object);
+            var parser = new ActionParser(repoBrowser.Object);
+            var processor = new WorkflowActionProcessor(repoBrowser.Object, parser, mock.Object);
             try
             {
                 await processor.ProcessAsync(tmp.Data, false, CancellationToken.None);

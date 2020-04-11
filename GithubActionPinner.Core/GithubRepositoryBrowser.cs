@@ -31,9 +31,13 @@ namespace GithubActionPinner.Core
         public async Task<bool> IsRepositoryAccessibleAsync(string owner, string repository, CancellationToken cancellationToken)
         {
             var response = await _httpClient.GetAsync($"repos/{owner}/{repository}", cancellationToken);
-
-            // if not found either does not exist or private; can't tell and don't care
             return response.StatusCode == System.Net.HttpStatusCode.OK;
+        }
+
+        public async Task<string> GetRepositoryDefaultBranchAsync(string owner, string repository, CancellationToken cancellationToken)
+        {
+            var repo = await _httpClient.GetAsync<GithubRepository>($"repos/{owner}/{repository}", cancellationToken);
+            return repo.DefaultBranch;
         }
 
         /// <summary>

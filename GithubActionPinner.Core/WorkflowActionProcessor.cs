@@ -11,12 +11,15 @@ namespace GithubActionPinner.Core
     {
         private readonly ILogger _logger;
         private readonly IGithubRepositoryBrowser _githubRepositoryBrowser;
+        private readonly IActionParser _actionParser;
 
         public WorkflowActionProcessor(
             IGithubRepositoryBrowser githubRepositoryBrowser,
+            IActionParser actionParser,
             ILogger<WorkflowActionProcessor> logger)
         {
             _githubRepositoryBrowser = githubRepositoryBrowser;
+            _actionParser = actionParser;
             _logger = logger;
         }
 
@@ -24,7 +27,6 @@ namespace GithubActionPinner.Core
         {
             // could parse file for validity but string manipulation is much easier #famousLastWords
             var lines = await File.ReadAllLinesAsync(file, cancellationToken);
-            var parser = new ActionParser();
             for (int i = 0; i < lines.Length; i++)
             {
                 if (!HasActionReference(lines[i]))
@@ -33,7 +35,7 @@ namespace GithubActionPinner.Core
                 ActionReference actionReference;
                 try
                 {
-                    actionReference = parser.ParseAction(lines[i]);
+                    actionReference = await _actionParser.ParseActionAsync(lines[i], cancellationToken);
                 }
                 catch (NotSupportedException ex)
                 {

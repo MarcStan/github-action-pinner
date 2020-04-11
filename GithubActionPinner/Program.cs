@@ -36,6 +36,15 @@ namespace GithubActionPinner
             }
         }
 
+        private static IServiceCollection SetupDI(string token)
+        {
+            return new ServiceCollection()
+                   .AddLogging(builder => builder.AddProvider(new ConsoleLoggerProvider()))
+                   .AddTransient<IActionParser, ActionParser>()
+                   .AddTransient<WorkflowActionProcessor>()
+                   .AddSingleton(_ => (IGithubRepositoryBrowser)new GithubRepositoryBrowser(token));
+        }
+
         private static async Task RunAsync(IConfiguration configuration, CancellationToken cancellationToken)
         {
             var (fileOrFolder, mode, token) = ParseArguments(configuration);
@@ -65,10 +74,7 @@ namespace GithubActionPinner
                 filesToProcess = new[] { fileOrFolder };
             }
 
-            var services = new ServiceCollection()
-                .AddLogging(builder => builder.AddProvider(new ConsoleLoggerProvider()))
-                .AddTransient<WorkflowActionProcessor>()
-                .AddSingleton(_ => (IGithubRepositoryBrowser)new GithubRepositoryBrowser(token));
+            var services = SetupDI(token);
 
             using (var sp = services.BuildServiceProvider())
             {

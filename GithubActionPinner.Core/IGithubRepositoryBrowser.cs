@@ -13,6 +13,12 @@ namespace GithubActionPinner.Core
         Task<bool> IsRepositoryAccessibleAsync(string owner, string repository, CancellationToken cancellationToken);
 
         /// <summary>
+        /// Github allows users to set a custom default branch.
+        /// This function will resolve it.
+        /// </summary>
+        Task<string> GetRepositoryDefaultBranchAsync(string owner, string repository, CancellationToken cancellationToken);
+
+        /// <summary>
         /// For a given branch name gets the SHA of the latest commit on it.
         /// </summary>
         Task<string> GetShaForLatestCommitAsync(string owner, string repository, string branchName, CancellationToken cancellationToken);

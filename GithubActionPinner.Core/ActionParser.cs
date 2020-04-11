@@ -1,47 +1,34 @@
 ﻿using GithubActionPinner.Core.Models;
 using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace GithubActionPinner.Core
 {
     /// <summary>
     /// Helper that parses yml file action references into an object model.
     /// </summary>
-    public class ActionParser
+    public class ActionParser : IActionParser
     {
-        public ActionReference ParseAction(string text)
+        private readonly IGithubRepositoryBrowser _githubRepositoryBrowser;
+
+        public ActionParser(IGithubRepositoryBrowser githubRepositoryBrowser)
+            => _githubRepositoryBrowser = githubRepositoryBrowser;
+
+        public async Task<ActionReference> ParseActionAsync(string text, CancellationToken cancellationToken)
         {
             // expected format: "  - uses: <owner>/<repo>[@<version>] [# comment|# pin@<version> comment]"
             // example format:  "  - uses: actions/foo@v1 [# comment]"
             // example format:  "  - uses: actions/foo@SHA [# pin@v1 comment]"
-            var actionRef = text.Trim();
+            var actionRef = text.TrimStart();
             if (!actionRef.StartsWith("- uses:", StringComparison.OrdinalIgnoreCase))
                 throw new NotSupportedException($"Action references must start with '- uses:', {text} is invalid");
 
             actionRef = actionRef.Substring("- uses:".Length).TrimStart();
-            string comment = "";
-            var idx = actionRef.IndexOf('#');
-            if (idx > -1)
-            {
-                comment = actionRef.Substring(idx + 1).TrimStart();
-                actionRef = actionRef.Substring(0, idx).TrimEnd();
-            }
-            idx = actionRef.IndexOf('@');
-            ActionReferenceType type;
-            string version;
-            if (idx > -1)
-            {
-                version = actionRef.Substring(idx + 1).TrimEnd();
-                type = ParseType(version);
-                actionRef = actionRef.Substring(0, idx);
-            }
-            else
-            {
-                // no reference = default branch
-                type = ActionReferenceType.Branch;
-                // TODO: default branch can be changed on github
-                version = "master";
-            }
+            var comment = ParseAndExtractComment(ref actionRef);
+
+            var (version, type) = ParseVersion(ref actionRef);
             // can either be "owner/repo" or "owner/repo/subdir../foo" -> owner is first, repo second
             if (!actionRef.Contains('/'))
                 throw new NotSupportedException("Action references must be a valid repository");
@@ -53,26 +40,38 @@ namespace GithubActionPinner.Core
             var parts = actionRef.Split('/');
             string owner = parts[0];
             string repo = parts[1];
+
+            if (version == null)
+            {
+                // no version = default branch
+                version = await _githubRepositoryBrowser.GetRepositoryDefaultBranchAsync(owner, repo, cancellationToken);
+                type = ActionReferenceType.Branch;
+            }
+
             ActionVersion? pinned = null;
             const string pinPrefix = "pin@";
-            if (comment.StartsWith(pinPrefix, StringComparison.OrdinalIgnoreCase))
+            var trimmedComment = comment.TrimStart();
+            if (trimmedComment.StartsWith(pinPrefix, StringComparison.OrdinalIgnoreCase))
             {
-                idx = comment.IndexOf(' ');
+                var idx = trimmedComment.IndexOf(' ');
                 if (idx < 0)
-                    idx = comment.Length;
+                    idx = trimmedComment.Length;
 
                 // pin@master or pin@tag
-                var pinnedVersion = comment.Substring(pinPrefix.Length, idx - pinPrefix.Length);
+                var pinnedVersion = trimmedComment.Substring(pinPrefix.Length, idx - pinPrefix.Length);
                 pinned = new ActionVersion
                 {
                     ReferenceType = ParseType(pinnedVersion),
                     ReferenceVersion = pinnedVersion
                 };
-                comment = comment.Substring(idx);
+                comment = trimmedComment.Substring(idx);
 
-                // take away only one space from remainder because that's what we add, the rest is comment from the user; best to leave alone
-                if (comment.StartsWith(' '))
+                if (comment.StartsWith(' ') || comment.StartsWith('\t'))
+                {
+                    // take away only one whitespace from remainder because that's what we add
+                    // the rest is comment from the user (best to leave alone to not break any desired formatting)
                     comment = comment.Substring(1);
+                }
             }
             return new ActionReference
             {
@@ -86,9 +85,43 @@ namespace GithubActionPinner.Core
             };
         }
 
+        private (string? version, ActionReferenceType type) ParseVersion(ref string actionRef)
+        {
+            var idx = actionRef.IndexOf('@');
+            ActionReferenceType type;
+            string version;
+            if (idx > -1)
+            {
+                version = actionRef.Substring(idx + 1).TrimEnd();
+                type = ParseType(version);
+                actionRef = actionRef.Substring(0, idx);
+                return (version, type);
+            }
+            return (null, ActionReferenceType.Unknown);
+        }
+
+        /// <summary>
+        /// Given an action reference ("actions/foo@v1 #bar") will extract the comment.
+        /// </summary>
+        /// <returns>The comment if any</returns>
+        private string ParseAndExtractComment(ref string actionRef)
+        {
+            var idx = actionRef.IndexOf('#');
+            if (idx > -1)
+            {
+                var comment = actionRef.Substring(idx + 1);
+                actionRef = actionRef.Substring(0, idx).Trim();
+                return comment;
+            }
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// Give a action version will determine its type and returns it.
+        /// </summary>
         private ActionReferenceType ParseType(string version)
         {
-            // TODO: someone could have a branch with same naming as version or branch name same as SHA; cannot detect here without checking git history
+            // TODO: someone could have a branch with same naming as version or branch name same as SHA; cannot detect here without checking git history, not sure if github actions would support this case
             if (VersionHelper.TryParse(version, out _))
                 return ActionReferenceType.Tag;
 
