@@ -5,7 +5,12 @@ namespace GithubActionPinner.Core
 {
     public interface IGithubRepositoryBrowser
     {
-        Task<bool> IsPublicAsync(string owner, string repository, CancellationToken cancellationToken);
+        /// <summary>
+        /// Will return whether the repository is accessible to the current user.
+        /// If no token is used, then only public repositories are accessible.
+        /// With a token all repositories with read access are considered accessible.
+        /// </summary>
+        Task<bool> IsRepositoryAccessibleAsync(string owner, string repository, CancellationToken cancellationToken);
 
         /// <summary>
         /// For a given branch name gets the SHA of the latest commit on it.

@@ -25,7 +25,7 @@ namespace GithubActionPinner.Core.Tests
 
             var repoBrowser = new Mock<IGithubRepositoryBrowser>();
             repoBrowser
-                .Setup(x => x.IsPublicAsync(owner, repo, It.IsAny<CancellationToken>()))
+                .Setup(x => x.IsRepositoryAccessibleAsync(owner, repo, It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(true));
             (string, string)? response = (latestVersion, latestSha);
             repoBrowser
@@ -57,7 +57,7 @@ namespace GithubActionPinner.Core.Tests
             }
             Assert.IsTrue(file.Contains($"{actionName}@{latestSha} # pin@{latestVersion}"));
 
-            repoBrowser.Verify(x => x.IsPublicAsync(owner, repo, It.IsAny<CancellationToken>()), Times.Once);
+            repoBrowser.Verify(x => x.IsRepositoryAccessibleAsync(owner, repo, It.IsAny<CancellationToken>()), Times.Once);
             // can be tag or branch
             if (!string.IsNullOrEmpty(currentVersion) && VersionHelper.TryParse(currentVersion, out _))
                 repoBrowser.Verify(x => x.GetLatestSemVerCompliantAsync(owner, repo, currentVersion, It.IsAny<CancellationToken>()), Times.Once);
@@ -74,7 +74,7 @@ namespace GithubActionPinner.Core.Tests
 
             var repoBrowser = new Mock<IGithubRepositoryBrowser>();
             repoBrowser
-                .Setup(x => x.IsPublicAsync(owner, repo, It.IsAny<CancellationToken>()))
+                .Setup(x => x.IsRepositoryAccessibleAsync(owner, repo, It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(true));
             (string, string)? response = (latestVersion, latestSha);
             repoBrowser
@@ -106,7 +106,7 @@ namespace GithubActionPinner.Core.Tests
             }
             Assert.IsTrue(file.Contains($"{actionName}@{latestSha} # pin@{latestVersion}"));
 
-            repoBrowser.Verify(x => x.IsPublicAsync(owner, repo, It.IsAny<CancellationToken>()), Times.Once);
+            repoBrowser.Verify(x => x.IsRepositoryAccessibleAsync(owner, repo, It.IsAny<CancellationToken>()), Times.Once);
             // can be tag or branch
             if (!string.IsNullOrEmpty(currentVersion) && VersionHelper.TryParse(currentVersion, out _))
                 repoBrowser.Verify(x => x.GetLatestSemVerCompliantAsync(owner, repo, currentVersion, It.IsAny<CancellationToken>()), Times.Once);
@@ -121,7 +121,7 @@ namespace GithubActionPinner.Core.Tests
 
             var repo = new Mock<IGithubRepositoryBrowser>();
             repo
-                .Setup(x => x.IsPublicAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Setup(x => x.IsRepositoryAccessibleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(true));
             var processor = new WorkflowActionProcessor(repo.Object, new Mock<ILogger<WorkflowActionProcessor>>().Object);
             try
@@ -142,7 +142,7 @@ namespace GithubActionPinner.Core.Tests
             var mock = new Mock<ILogger<WorkflowActionProcessor>>();
             var repo = new Mock<IGithubRepositoryBrowser>();
             repo
-                .Setup(x => x.IsPublicAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Setup(x => x.IsRepositoryAccessibleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(true));
             var processor = new WorkflowActionProcessor(repo.Object, mock.Object);
             try
@@ -163,7 +163,7 @@ namespace GithubActionPinner.Core.Tests
             var mock = new Mock<ILogger<WorkflowActionProcessor>>();
             var repo = new Mock<IGithubRepositoryBrowser>();
             repo
-                .Setup(x => x.IsPublicAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Setup(x => x.IsRepositoryAccessibleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(true));
             var processor = new WorkflowActionProcessor(repo.Object, mock.Object);
             try

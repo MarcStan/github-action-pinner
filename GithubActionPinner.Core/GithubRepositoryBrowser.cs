@@ -28,7 +28,7 @@ namespace GithubActionPinner.Core
                 _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", oauthToken);
         }
 
-        public async Task<bool> IsPublicAsync(string owner, string repository, CancellationToken cancellationToken)
+        public async Task<bool> IsRepositoryAccessibleAsync(string owner, string repository, CancellationToken cancellationToken)
         {
             var response = await _httpClient.GetAsync($"repos/{owner}/{repository}", cancellationToken);
 

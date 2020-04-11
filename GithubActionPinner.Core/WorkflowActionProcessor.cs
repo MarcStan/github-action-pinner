@@ -64,9 +64,9 @@ namespace GithubActionPinner.Core
                         throw new ArgumentOutOfRangeException(type.ToString());
                 }
 
-                if (!await _githubRepositoryBrowser.IsPublicAsync(actionReference.Owner, actionReference.Repository, cancellationToken))
+                if (!await _githubRepositoryBrowser.IsRepositoryAccessibleAsync(actionReference.Owner, actionReference.Repository, cancellationToken))
                 {
-                    // cannot pin private repos, so skip
+                    // cannot pin repos without access, so skip
                     _logger.LogWarning($"Could not find action {actionReference.ActionName}, repo is private or removed. Skipping..");
                     continue;
                 }
