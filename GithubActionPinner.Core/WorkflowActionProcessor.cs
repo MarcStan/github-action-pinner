@@ -48,57 +48,26 @@ namespace GithubActionPinner.Core
                     continue;
                 }
 
-                Func<CancellationToken, Task<(string, string)?>> resolver;
-                if (actionReference.Pinned == null)
+                Func<CancellationToken, Task<(string namedReference, string sha)?>> referenceResolver;
+
+                var currentVersion = actionReference.Pinned?.ReferenceVersion ?? actionReference.ReferenceVersion;
+                // each type can either be already pinned or not
+                switch (actionReference.ReferenceType)
                 {
-                    if (actionReference.ReferenceType != ActionReferenceType.Sha)
-                    {
-                        // never pinned before and not a SHA -> pin @current
-                        if (actionReference.ReferenceType == ActionReferenceType.Tag)
-                        {
-                            var tag = actionReference.ReferenceVersion;
-                            resolver = async (token) => await _githubRepositoryBrowser.GetShaForLatestSemVerCompliantCommitAsync(actionReference.Owner, actionReference.Repository, tag, token);
-                        }
-                        else if (actionReference.ReferenceType == ActionReferenceType.Branch)
-                        {
-                            var branchName = actionReference.ReferenceVersion;
-                            resolver = async (token) => (await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token), branchName);
-                        }
-                        else
-                        {
-                            throw new NotSupportedException($"Unsupported pinned version {actionReference.ReferenceVersion}");
-                        }
-                    }
-                    else
-                    {
-                        // SHA pinned but no reference
+                    case ActionReferenceType.Branch:
+                        var branchName = currentVersion;
+                        referenceResolver = async (token) => (await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token), branchName);
+                        break;
+                    case ActionReferenceType.Tag:
+                        var tag = currentVersion;
+                        referenceResolver = async (token) => await _githubRepositoryBrowser.GetLatestSemVerCompliantAsync(actionReference.Owner, actionReference.Repository, tag, token);
+                        break;
+                    case ActionReferenceType.Sha:
+                        // makes no sense to be pinned
                         _logger.LogInformation($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is not pinned. Cannot determine version, switch to a version or add a comment '# @<version>'");
                         continue;
-                    }
-                }
-                else
-                {
-                    // must be SHA
-                    var currentSha = actionReference.ReferenceVersion;
-                    if (actionReference.Pinned.ReferenceType == ActionReferenceType.Tag)
-                    {
-                        // update can be:
-                        //  - same version but different SHA
-                        //  - new minor version
-                        var currentVersion = actionReference.Pinned.ReferenceVersion;
-
-                        resolver = async (token) => await _githubRepositoryBrowser.GetShaForLatestSemVerCompliantCommitAsync(actionReference.Owner, actionReference.Repository, currentVersion, token);
-                    }
-                    else if (actionReference.Pinned.ReferenceType == ActionReferenceType.Branch)
-                    {
-                        var branchName = actionReference.Pinned.ReferenceVersion;
-                        // find latest on branch and pin it
-                        resolver = async (token) => (branchName, await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token));
-                    }
-                    else
-                    {
-                        throw new NotSupportedException($"Unsupported pinned version {actionReference.Pinned.ReferenceVersion}");
-                    }
+                    default:
+                        throw new ArgumentOutOfRangeException(actionReference.ReferenceType.ToString());
                 }
 
                 if (!await _githubRepositoryBrowser.IsPublicAsync(actionReference.Owner, actionReference.Repository, cancellationToken))
@@ -107,7 +76,7 @@ namespace GithubActionPinner.Core
                     _logger.LogWarning($"Could not find action {actionReference.ActionName}, repo is private or removed. Skipping..");
                     continue;
                 }
-                var response = await resolver(cancellationToken);
+                var response = await referenceResolver(cancellationToken);
                 if (response == null)
                 {
                     _logger.LogTrace($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is already up to date.");
@@ -125,7 +94,7 @@ namespace GithubActionPinner.Core
                     }
                     if (update)
                     {
-                        lines[i] = UpdateLine(lines[i], actionReference);
+                        lines[i] = UpdateLine(lines[i], actionReference, sha, tagOrBranch);
                         _logger.LogInformation($"(Line {i + 1}): Updated action '{actionReference.ActionName}' {desired}.");
                     }
                     else
@@ -134,11 +103,15 @@ namespace GithubActionPinner.Core
                     }
                 }
             }
+            if (update)
+                await File.WriteAllLinesAsync(file, lines, cancellationToken);
         }
 
-        private string UpdateLine(string line, ActionReference actionReference)
+        private string UpdateLine(string line, ActionReference actionReference, string sha, string pinned)
         {
-            return line;
+            var prefix = line.Substring(0, line.IndexOf(actionReference.ActionName));
+
+            return $"{prefix}{actionReference.ActionName}@{sha} # @{pinned} {actionReference.Comment}";
         }
 
         private static bool HasActionReference(string line)
