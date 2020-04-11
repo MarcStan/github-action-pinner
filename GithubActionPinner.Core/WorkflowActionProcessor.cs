@@ -79,21 +79,30 @@ namespace GithubActionPinner.Core
                 {
                     var (tagOrBranch, sha) = response.Value;
                     var existingRef = actionReference.Pinned?.ReferenceVersion ?? actionReference.ReferenceVersion;
-                    var desired = $"{existingRef} -> {tagOrBranch}";
+                    var desired = $"updated {existingRef} -> {tagOrBranch}";
                     if (existingRef == tagOrBranch)
                     {
-                        // update like v1 -> v1 or master -> master look confusing
+                        if (actionReference.Pinned != null &&
+                            actionReference.ReferenceVersion == sha)
+                        {
+                            // no update required
+                            continue;
+                        }
+                        // update like v1 -> v1 or master -> master look confusing to user
                         // show the underlying sha change instead
-                        desired = $"{existingRef} (new SHA {sha})";
+
+                        // modify wording depending on first pin or update of SHA
+                        var updateType = actionReference.Pinned == null ? "using" : "updated to";
+                        desired = $"pinned to {existingRef} ({updateType} SHA {sha})";
                     }
                     if (update)
                     {
                         lines[i] = UpdateLine(lines[i], actionReference, sha, tagOrBranch);
-                        _logger.LogInformation($"(Line {i + 1}): Updated action '{actionReference.ActionName}' {desired}.");
+                        _logger.LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' was {desired}.");
                     }
                     else
                     {
-                        _logger.LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' can be updated: {desired}.");
+                        _logger.LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' can be {desired}.");
                     }
                 }
             }

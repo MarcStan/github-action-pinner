@@ -33,7 +33,19 @@ This will scan the action yml for all actions and update them to use the respect
 
 > GithubActionPinner --check /path/to/workflow.yml
 
-This will only check for updates and print them on the console. The yml will not be modified
+This will only check for updates and print them on the console. The yml will not be modified.
+
+Instead of specifying a file you can also specify a folder for both commands:
+
+> GithubActionPinner --update /path/to/folder
+>
+> GithubActionPinner --check /path/to/folder
+
+In which case the command will recursively scan all folders and processes all files that:
+
+* are stored in .github/workflows and
+* end with .yml or .yaml
+
 
 # Why you should avoiding non-SHA action references
 
