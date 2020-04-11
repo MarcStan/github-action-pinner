@@ -1,6 +1,7 @@
 ﻿using GithubActionPinner.Core;
 using GithubActionPinner.Core.Models;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System;
 
 namespace GithubActionStats.Core.Tests
 {
@@ -8,17 +9,17 @@ namespace GithubActionStats.Core.Tests
     public class ActionParserTests
     {
         [DataTestMethod]
-        [DataRow("  - uses: action/foo@v1", "action/foo", ActionReferenceType.Tag, "v1", "action", "foo", "")]
-        [DataRow("- uses: action/foo@v2", "action/foo", ActionReferenceType.Tag, "v2", "action", "foo", "")]
-        [DataRow("          \t         \t- uses: action/foo@v2          \t              ", "action/foo", ActionReferenceType.Tag, "v2", "action", "foo", "")]
-        [DataRow("  - uses: action/foo@v1.1", "action/foo", ActionReferenceType.Tag, "v1.1", "action", "foo", "")]
-        [DataRow("  - uses: action/foo@master", "action/foo", ActionReferenceType.Branch, "master", "action", "foo", "")]
-        [DataRow("  - uses: action/foo@dev", "action/foo", ActionReferenceType.Branch, "dev", "action", "foo", "")]
-        [DataRow("  - uses: action/repo/subdir@v1", "action/repo/subdir", ActionReferenceType.Tag, "v1", "action", "repo", "")]
-        [DataRow("  - uses: action/repo/dir1/dir2@dev", "action/repo/dir1/dir2", ActionReferenceType.Branch, "dev", "action", "repo", "")]
-        [DataRow("  - uses: action/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "action/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "action", "foo", "")]
-        [DataRow("  - uses: action/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe # @v1", "action/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "action", "foo", "@v1")]
-        [DataRow("  - uses: action/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe # random comment", "action/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "action", "foo", "random comment")]
+        [DataRow("  - uses: actions/foo@v1", "actions/foo", ActionReferenceType.Tag, "v1", "actions", "foo", "")]
+        [DataRow("- uses: actions/foo@v2", "actions/foo", ActionReferenceType.Tag, "v2", "actions", "foo", "")]
+        [DataRow("          \t         \t- uses: actions/foo@v2          \t              ", "actions/foo", ActionReferenceType.Tag, "v2", "actions", "foo", "")]
+        [DataRow("  - uses: actions/foo@v1.1", "actions/foo", ActionReferenceType.Tag, "v1.1", "actions", "foo", "")]
+        [DataRow("  - uses: actions/foo@master", "actions/foo", ActionReferenceType.Branch, "master", "actions", "foo", "")]
+        [DataRow("  - uses: actions/foo@dev", "actions/foo", ActionReferenceType.Branch, "dev", "actions", "foo", "")]
+        [DataRow("  - uses: actions/repo/subdir@v1", "actions/repo/subdir", ActionReferenceType.Tag, "v1", "actions", "repo", "")]
+        [DataRow("  - uses: actions/repo/dir1/dir2@dev", "actions/repo/dir1/dir2", ActionReferenceType.Branch, "dev", "actions", "repo", "")]
+        [DataRow("  - uses: actions/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions", "foo", "")]
+        [DataRow("  - uses: actions/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe # @v1", "actions/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions", "foo", "@v1")]
+        [DataRow("  - uses: actions/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe # random comment", "actions/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions", "foo", "random comment")]
         public void ValidActionShouldParseSuccessfully(string reference, string name, ActionReferenceType type, string version, string owner, string repository, string comment)
         {
             var parser = new ActionParser();
@@ -29,6 +30,38 @@ namespace GithubActionStats.Core.Tests
             Assert.AreEqual(owner, r.Owner);
             Assert.AreEqual(repository, r.Repository);
             Assert.AreEqual(comment, r.Comment);
+        }
+
+        [DataTestMethod]
+        // TODO: default branch can be changed on github
+        [DataRow("  - uses: actions/foo", "actions/foo", ActionReferenceType.Branch, "master", "actions", "foo", "")]
+        public void ActionWithoutReferenceShouldParseSuccessfully(string reference, string name, ActionReferenceType type, string version, string owner, string repository, string comment)
+        {
+            var parser = new ActionParser();
+            var r = parser.ParseAction(reference);
+            Assert.AreEqual(name, r.ActionName);
+            Assert.AreEqual(type, r.ReferenceType);
+            Assert.AreEqual(version, r.ReferenceVersion);
+            Assert.AreEqual(owner, r.Owner);
+            Assert.AreEqual(repository, r.Repository);
+            Assert.AreEqual(comment, r.Comment);
+        }
+
+        [DataTestMethod]
+        [DataRow("  - uses: actions")]
+        [DataRow("  - uses: docker://foo")]
+        [DataRow("  - uses: ./local/foo")]
+        public void UnsupportedActionsShouldThrow(string reference)
+        {
+            var parser = new ActionParser();
+            try
+            {
+                parser.ParseAction(reference);
+                Assert.Fail("should throw");
+            }
+            catch (NotSupportedException)
+            {
+            }
         }
     }
 }
