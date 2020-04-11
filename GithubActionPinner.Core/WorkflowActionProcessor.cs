@@ -25,6 +25,8 @@ namespace GithubActionPinner.Core
 
         public async Task ProcessAsync(string file, bool update, CancellationToken cancellationToken)
         {
+            _logger.LogInformation($"{(update ? "Updating" : "Checking")} actions in '{file}':");
+            int updates = 0;
             // could parse file for validity but string manipulation is much easier #famousLastWords
             var lines = await File.ReadAllLinesAsync(file, cancellationToken);
             for (int i = 0; i < lines.Length; i++)
@@ -108,8 +110,18 @@ namespace GithubActionPinner.Core
                     }
                 }
             }
+            if (updates > 0)
+            {
+                _logger.LogInformation($"{updates} action versions {(update ? "have been updated" : "need to be updated")}.");
+            }
+            else
+            {
+                _logger.LogInformation("No action updates found.");
+            }
             if (update)
+            {
                 await File.WriteAllLinesAsync(file, lines, cancellationToken);
+            }
         }
 
         private string UpdateLine(string line, ActionReference actionReference, string sha, string pinned)
