@@ -39,23 +39,24 @@ namespace GithubActionPinner.Core.Tests
             try
             {
                 await processor.ProcessAsync(tmp.Data, true, CancellationToken.None);
-                var file = File.ReadAllText(tmp.Data);
-                if (!string.IsNullOrEmpty(currentVersion))
-                {
-                    Assert.IsFalse(file.Contains($"{actionName}@{currentVersion}"));
-                }
-                else
-                {
-                    // old version had no latest -> can be any text not followed by @
-                    var regex = new Regex(Regex.Escape(actionName) + "[^@]");
-                    Assert.IsFalse(regex.IsMatch(file));
-                }
-                Assert.IsTrue(file.Contains($"{actionName}@{latestSha} # @{latestVersion}"));
             }
             catch
             {
                 Assert.Fail("should not throw");
             }
+            var file = File.ReadAllText(tmp.Data);
+            if (!string.IsNullOrEmpty(currentVersion))
+            {
+                Assert.IsFalse(file.Contains($"{actionName}@{currentVersion}"));
+            }
+            else
+            {
+                // old version had no latest -> can be any text not followed by @
+                var regex = new Regex(Regex.Escape(actionName) + "[^@]");
+                Assert.IsFalse(regex.IsMatch(file));
+            }
+            Assert.IsTrue(file.Contains($"{actionName}@{latestSha} # pin@{latestVersion}"));
+
             repoBrowser.Verify(x => x.IsPublicAsync(owner, repo, It.IsAny<CancellationToken>()), Times.Once);
             // can be tag or branch
             if (!string.IsNullOrEmpty(currentVersion) && VersionHelper.TryParse(currentVersion, out _))
@@ -69,7 +70,7 @@ namespace GithubActionPinner.Core.Tests
         public async Task PinnedActionShouldBeUpdatedIfPossible(string owner, string repo, string currentSha, string currentVersion, string latestVersion, string latestSha)
         {
             var actionName = $"{owner}/{repo}";
-            using var tmp = ExtractAndTransformDataFileTemporarily("one-action-transformed.yml", $"{actionName}@{currentSha} # @{currentVersion}");
+            using var tmp = ExtractAndTransformDataFileTemporarily("one-action-transformed.yml", $"{actionName}@{currentSha} # pin@{currentVersion}");
 
             var repoBrowser = new Mock<IGithubRepositoryBrowser>();
             repoBrowser
@@ -87,23 +88,24 @@ namespace GithubActionPinner.Core.Tests
             try
             {
                 await processor.ProcessAsync(tmp.Data, true, CancellationToken.None);
-                var file = File.ReadAllText(tmp.Data);
-                if (!string.IsNullOrEmpty(currentVersion))
-                {
-                    Assert.IsFalse(file.Contains($"{actionName}@{currentVersion}"));
-                }
-                else
-                {
-                    // old version had no latest -> can be any text not followed by @
-                    var regex = new Regex(Regex.Escape(actionName) + "[^@]");
-                    Assert.IsFalse(regex.IsMatch(file));
-                }
-                Assert.IsTrue(file.Contains($"{actionName}@{latestSha} # @{latestVersion}"));
             }
             catch
             {
                 Assert.Fail("should not throw");
             }
+            var file = File.ReadAllText(tmp.Data);
+            if (!string.IsNullOrEmpty(currentVersion))
+            {
+                Assert.IsFalse(file.Contains($"{actionName}@{currentVersion}"));
+            }
+            else
+            {
+                // old version had no latest -> can be any text not followed by @
+                var regex = new Regex(Regex.Escape(actionName) + "[^@]");
+                Assert.IsFalse(regex.IsMatch(file));
+            }
+            Assert.IsTrue(file.Contains($"{actionName}@{latestSha} # pin@{latestVersion}"));
+
             repoBrowser.Verify(x => x.IsPublicAsync(owner, repo, It.IsAny<CancellationToken>()), Times.Once);
             // can be tag or branch
             if (!string.IsNullOrEmpty(currentVersion) && VersionHelper.TryParse(currentVersion, out _))
@@ -118,6 +120,9 @@ namespace GithubActionPinner.Core.Tests
             using var tmp = ExtractDataFileTemporarily("test.yml");
 
             var repo = new Mock<IGithubRepositoryBrowser>();
+            repo
+                .Setup(x => x.IsPublicAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult(true));
             var processor = new WorkflowActionProcessor(repo.Object, new Mock<ILogger<WorkflowActionProcessor>>().Object);
             try
             {
@@ -136,6 +141,9 @@ namespace GithubActionPinner.Core.Tests
 
             var mock = new Mock<ILogger<WorkflowActionProcessor>>();
             var repo = new Mock<IGithubRepositoryBrowser>();
+            repo
+                .Setup(x => x.IsPublicAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult(true));
             var processor = new WorkflowActionProcessor(repo.Object, mock.Object);
             try
             {
@@ -154,6 +162,9 @@ namespace GithubActionPinner.Core.Tests
 
             var mock = new Mock<ILogger<WorkflowActionProcessor>>();
             var repo = new Mock<IGithubRepositoryBrowser>();
+            repo
+                .Setup(x => x.IsPublicAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult(true));
             var processor = new WorkflowActionProcessor(repo.Object, mock.Object);
             try
             {

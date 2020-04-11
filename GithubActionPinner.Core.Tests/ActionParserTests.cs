@@ -34,8 +34,8 @@ namespace GithubActionStats.Core.Tests
         }
 
         [DataTestMethod]
-        [DataRow("  - uses: actions/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe # @v1", "actions/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions", "foo", "", ActionReferenceType.Tag, "v1")]
-        [DataRow("  - uses: actions/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe # @master random comment", "actions/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions", "foo", "random comment", ActionReferenceType.Branch, "master")]
+        [DataRow("  - uses: actions/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe # pin@v1", "actions/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions", "foo", "", ActionReferenceType.Tag, "v1")]
+        [DataRow("  - uses: actions/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe # pin@master random comment", "actions/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions", "foo", "random comment", ActionReferenceType.Branch, "master")]
         public void PinnedActionShouldParseSuccessfully(string reference, string name, ActionReferenceType type, string version, string owner, string repository, string comment, ActionReferenceType pinnedType, string pinnedVersion)
         {
             var parser = new ActionParser();

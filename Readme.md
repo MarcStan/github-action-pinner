@@ -13,12 +13,14 @@ steps:
 
 Only the last reference style (referencing an action version by SHA) is secure as both branch and tag references can be updated in the source repository at any time.
 
-Using the pinner allows you to convert all of the references to SHA references and to easily update them in the future:
+Manually updating each action to its respective SHA is cubersome.
+
+Using the pinner allows you to automatically convert all of the references to SHA references, see the referenced tag/branch and to easily update them in the future:
 
 ``` yml
 steps:
-  - uses: actions/checkout@01aecccf739ca6ff86c0539fbc67a7a5007bbc81 # @master
-  - uses: actions/setup-dotnet@b7821147f564527086410e8edd122d89b4b9602f # @v1
+  - uses: actions/checkout@01aecccf739ca6ff86c0539fbc67a7a5007bbc81 # pin@master
+  - uses: actions/setup-dotnet@b7821147f564527086410e8edd122d89b4b9602f # pin@v1
   - uses: actions/upload-artifact@3446296876d12d4e3a0f3145a3c87e67bf0a16b5
 ```
 
@@ -29,7 +31,7 @@ steps:
 This will scan the action yml for all actions and update them to use the respective SHA.
 
 * for branch/tag references it will use the current underlying SHA
-* for SHA references it will only update them if it finds a comment "`# @v1`" or similar next to it
+* for SHA references it will only update them if it finds a comment "`# pin@v1`" or similar next to it
 
 > GithubActionPinner --check /path/to/workflow.yml
 

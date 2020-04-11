@@ -11,10 +11,11 @@ namespace GithubActionPinner.Core
     {
         public ActionReference ParseAction(string text)
         {
-            // expected format: "  - uses: <owner>/<repo>[@<version>] [# comment]"
+            // expected format: "  - uses: <owner>/<repo>[@<version>] [# comment|# pin@<version> comment]"
             // example format:  "  - uses: actions/foo@v1 [# comment]"
+            // example format:  "  - uses: actions/foo@SHA [# pin@v1 comment]"
             var actionRef = text.Trim();
-            if (!actionRef.StartsWith("- uses:"))
+            if (!actionRef.StartsWith("- uses:", StringComparison.OrdinalIgnoreCase))
                 throw new NotSupportedException($"Action references must start with '- uses:', {text} is invalid");
 
             actionRef = actionRef.Substring("- uses:".Length).TrimStart();
@@ -53,14 +54,15 @@ namespace GithubActionPinner.Core
             string owner = parts[0];
             string repo = parts[1];
             ActionVersion? pinned = null;
-            if (comment.StartsWith('@'))
+            const string pinPrefix = "pin@";
+            if (comment.StartsWith(pinPrefix, StringComparison.OrdinalIgnoreCase))
             {
                 idx = comment.IndexOf(' ');
                 if (idx < 0)
                     idx = comment.Length;
 
-                // @master or @tag
-                var pinnedVersion = comment.Substring(1, idx - 1);
+                // pin@master or pin@tag
+                var pinnedVersion = comment.Substring(pinPrefix.Length, idx - pinPrefix.Length);
                 pinned = new ActionVersion
                 {
                     ReferenceType = ParseType(pinnedVersion),
