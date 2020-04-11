@@ -31,24 +31,7 @@ namespace GithubActionPinner.Core
             if (idx > -1)
             {
                 version = actionRef.Substring(idx + 1).TrimEnd();
-                // TODO: someone could have a branch with same naming as version or branch name same as SHA; cannot detect here without checking git history
-                if (version.StartsWith("v", StringComparison.OrdinalIgnoreCase) &&
-                    // C# Version must be at least major and minor (1.0), but github action also supports "v1"
-                    (int.TryParse(version.Substring(1), out _) || Version.TryParse(version.Substring(1), out _)))
-                {
-                    type = ActionReferenceType.Tag;
-                }
-                // SHA-1: 40, SHA256: 64 characters, all hex
-                // TODO: are short SHA ids also supported?
-                else if ((version.Length == 40 || version.Length == 64) &&
-                    IsHex(version))
-                {
-                    type = ActionReferenceType.Sha;
-                }
-                else
-                {
-                    type = ActionReferenceType.Branch;
-                }
+                type = ParseType(version);
                 actionRef = actionRef.Substring(0, idx);
             }
             else
@@ -69,6 +52,26 @@ namespace GithubActionPinner.Core
             var parts = actionRef.Split('/');
             string owner = parts[0];
             string repo = parts[1];
+            ActionVersion? pinned = null;
+            if (comment.StartsWith('@'))
+            {
+                idx = comment.IndexOf(' ');
+                if (idx < 0)
+                    idx = comment.Length;
+
+                // @master or @tag
+                var pinnedVersion = comment.Substring(1, idx - 1);
+                pinned = new ActionVersion
+                {
+                    ReferenceType = ParseType(pinnedVersion),
+                    ReferenceVersion = pinnedVersion
+                };
+                comment = comment.Substring(idx);
+
+                // take away only one space from remainder because that's what we add, the rest is comment from the user; best to leave alone
+                if (comment.StartsWith(' '))
+                    comment = comment.Substring(1);
+            }
             return new ActionReference
             {
                 ActionName = actionRef,
@@ -77,7 +80,24 @@ namespace GithubActionPinner.Core
                 ReferenceVersion = version,
                 Owner = owner,
                 Repository = repo,
+                Pinned = pinned
             };
+        }
+
+        private ActionReferenceType ParseType(string version)
+        {
+            // TODO: someone could have a branch with same naming as version or branch name same as SHA; cannot detect here without checking git history
+            if (VersionHelper.TryParse(version, out _))
+                return ActionReferenceType.Tag;
+
+            // SHA-1: 40, SHA256: 64 characters, all hex
+            if ((version.Length == 40 || version.Length == 64) &&
+                IsHex(version))
+            {
+                return ActionReferenceType.Sha;
+            }
+
+            return ActionReferenceType.Branch;
         }
 
         private bool IsHex(string version)

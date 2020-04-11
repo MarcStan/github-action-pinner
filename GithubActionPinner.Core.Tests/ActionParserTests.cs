@@ -18,7 +18,6 @@ namespace GithubActionStats.Core.Tests
         [DataRow("  - uses: actions/repo/subdir@v1", "actions/repo/subdir", ActionReferenceType.Tag, "v1", "actions", "repo", "")]
         [DataRow("  - uses: actions/repo/dir1/dir2@dev", "actions/repo/dir1/dir2", ActionReferenceType.Branch, "dev", "actions", "repo", "")]
         [DataRow("  - uses: actions/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions", "foo", "")]
-        [DataRow("  - uses: actions/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe # @v1", "actions/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions", "foo", "@v1")]
         [DataRow("  - uses: actions/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe # random comment", "actions/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions", "foo", "random comment")]
         public void ValidActionShouldParseSuccessfully(string reference, string name, ActionReferenceType type, string version, string owner, string repository, string comment)
         {
@@ -30,6 +29,27 @@ namespace GithubActionStats.Core.Tests
             Assert.AreEqual(owner, r.Owner);
             Assert.AreEqual(repository, r.Repository);
             Assert.AreEqual(comment, r.Comment);
+
+            Assert.IsNull(r.Pinned);
+        }
+
+        [DataTestMethod]
+        [DataRow("  - uses: actions/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe # @v1", "actions/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions", "foo", "", ActionReferenceType.Tag, "v1")]
+        [DataRow("  - uses: actions/foo@de4cd7198fed4a740bdc2073abeb76e496c7c6fe # @master random comment", "actions/foo", ActionReferenceType.Sha, "de4cd7198fed4a740bdc2073abeb76e496c7c6fe", "actions", "foo", "random comment", ActionReferenceType.Branch, "master")]
+        public void PinnedActionShouldParseSuccessfully(string reference, string name, ActionReferenceType type, string version, string owner, string repository, string comment, ActionReferenceType pinnedType, string pinnedVersion)
+        {
+            var parser = new ActionParser();
+            var r = parser.ParseAction(reference);
+            Assert.AreEqual(name, r.ActionName);
+            Assert.AreEqual(type, r.ReferenceType);
+            Assert.AreEqual(version, r.ReferenceVersion);
+            Assert.AreEqual(owner, r.Owner);
+            Assert.AreEqual(repository, r.Repository);
+            Assert.AreEqual(comment, r.Comment);
+
+            Assert.IsNotNull(r.Pinned);
+            Assert.AreEqual(pinnedType, r.Pinned.ReferenceType);
+            Assert.AreEqual(pinnedVersion, r.Pinned.ReferenceVersion);
         }
 
         [DataTestMethod]

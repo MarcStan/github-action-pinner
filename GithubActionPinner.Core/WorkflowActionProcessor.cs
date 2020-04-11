@@ -40,23 +40,17 @@ namespace GithubActionPinner.Core
                     _logger.LogWarning($"Skipping invalid line #{i}: {ex.Message}");
                     continue;
                 }
-                if (actionReference.ActionName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase) ||
-                    actionReference.ActionName.StartsWith("./", StringComparison.OrdinalIgnoreCase))
-                {
-                    // don't support docker for now
-                    // local actions make no sense to be pinned as they are in a trusted environment
-                    continue;
-                }
 
                 Func<CancellationToken, Task<(string namedReference, string sha)?>> referenceResolver;
 
                 var currentVersion = actionReference.Pinned?.ReferenceVersion ?? actionReference.ReferenceVersion;
                 // each type can either be already pinned or not
-                switch (actionReference.ReferenceType)
+                var type = actionReference.Pinned?.ReferenceType ?? actionReference.ReferenceType;
+                switch (type)
                 {
                     case ActionReferenceType.Branch:
                         var branchName = currentVersion;
-                        referenceResolver = async (token) => (await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token), branchName);
+                        referenceResolver = async (token) => (branchName, await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token));
                         break;
                     case ActionReferenceType.Tag:
                         var tag = currentVersion;
@@ -67,7 +61,7 @@ namespace GithubActionPinner.Core
                         _logger.LogInformation($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is not pinned. Cannot determine version, switch to a version or add a comment '# @<version>'");
                         continue;
                     default:
-                        throw new ArgumentOutOfRangeException(actionReference.ReferenceType.ToString());
+                        throw new ArgumentOutOfRangeException(type.ToString());
                 }
 
                 if (!await _githubRepositoryBrowser.IsPublicAsync(actionReference.Owner, actionReference.Repository, cancellationToken))
