@@ -8,12 +8,14 @@
   <ItemGroup>
     <None Remove="Data\all-reference-types.yml" />
     <None Remove="Data\invalid-but-parsable.yml" />
+    <None Remove="Data\one-action-transformed.yml" />
     <None Remove="Data\test.yml" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Data\invalid-but-parsable.yml" />
     <EmbeddedResource Include="Data\all-reference-types.yml" />
+    <EmbeddedResource Include="Data\one-action-transformed.yml" />
     <EmbeddedResource Include="Data\test.yml" />
   </ItemGroup>
 

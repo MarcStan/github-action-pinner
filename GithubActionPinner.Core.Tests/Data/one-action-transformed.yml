@@ -1,0 +1,17 @@
+﻿on:
+  push:
+    branches:
+      - master
+
+env:
+  SemVer: 1.0.0
+  Project: GithubActionPinner
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+    - uses: __ACTION__

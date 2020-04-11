@@ -5,7 +5,7 @@
 
 env:
   SemVer: 1.0.0
-  Project: GithubActionStats
+  Project: GithubActionPinner
 
 jobs:
   build:
