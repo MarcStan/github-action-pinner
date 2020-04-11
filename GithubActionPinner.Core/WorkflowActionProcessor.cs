@@ -40,9 +40,11 @@ namespace GithubActionPinner.Core
                     _logger.LogWarning($"Skipping invalid line #{i}: {ex.Message}");
                     continue;
                 }
-                if (actionReference.ActionName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase))
+                if (actionReference.ActionName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase) ||
+                    actionReference.ActionName.StartsWith("./", StringComparison.OrdinalIgnoreCase))
                 {
                     // don't support docker for now
+                    // local actions make no sense to be pinned as they are in a trusted environment
                     continue;
                 }
 

@@ -55,7 +55,7 @@ namespace GithubActionPinner.Core
         /// Will list all tags and finds tag v1 is on a newer commit -> returns its sha
         /// Will list all tags and finds tag v1 and v1.2 (v1 is on a newer commit) -> returns its sha
         /// </example>
-        public async Task<(string tag, string sha)?> GetShaForLatestSemVerCompliantCommitAsync(string owner, string repository, string tag, CancellationToken cancellationToken)
+        public async Task<(string tag, string sha)?> GetLatestSemVerCompliantAsync(string owner, string repository, string tag, CancellationToken cancellationToken)
         {
             if (!tag.StartsWith("v", StringComparison.OrdinalIgnoreCase))
                 throw new NotSupportedException($"Unsupported version tag {tag}");
