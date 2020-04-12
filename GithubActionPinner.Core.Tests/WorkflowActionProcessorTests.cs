@@ -44,13 +44,13 @@ namespace GithubActionPinner.Core.Tests
             var processor = new WorkflowActionProcessor(repoBrowser.Object, parser, new Mock<ILogger<WorkflowActionProcessor>>().Object);
             try
             {
-                await processor.ProcessAsync(tmp.Data, true, CancellationToken.None);
+                await processor.ProcessAsync(tmp.FilePath, true, CancellationToken.None);
             }
             catch
             {
                 Assert.Fail("should not throw");
             }
-            var file = File.ReadAllText(tmp.Data);
+            var file = File.ReadAllText(tmp.FilePath);
             if (!string.IsNullOrEmpty(currentVersion))
             {
                 Assert.IsFalse(file.Contains($"{actionName}@{currentVersion}"));
@@ -101,13 +101,13 @@ namespace GithubActionPinner.Core.Tests
             var processor = new WorkflowActionProcessor(repoBrowser.Object, parser, new Mock<ILogger<WorkflowActionProcessor>>().Object);
             try
             {
-                await processor.ProcessAsync(tmp.Data, true, CancellationToken.None);
+                await processor.ProcessAsync(tmp.FilePath, true, CancellationToken.None);
             }
             catch
             {
                 Assert.Fail("should not throw");
             }
-            var file = File.ReadAllText(tmp.Data);
+            var file = File.ReadAllText(tmp.FilePath);
             if (!string.IsNullOrEmpty(currentVersion))
             {
                 Assert.IsFalse(file.Contains($"{actionName}@{currentVersion}"));
@@ -141,7 +141,7 @@ namespace GithubActionPinner.Core.Tests
             var processor = new WorkflowActionProcessor(repoBrowser.Object, parser, new Mock<ILogger<WorkflowActionProcessor>>().Object);
             try
             {
-                await processor.ProcessAsync(tmp.Data, false, CancellationToken.None);
+                await processor.ProcessAsync(tmp.FilePath, false, CancellationToken.None);
             }
             catch (Exception)
             {
@@ -163,7 +163,7 @@ namespace GithubActionPinner.Core.Tests
             var processor = new WorkflowActionProcessor(repoBrowser.Object, parser, mock.Object);
             try
             {
-                await processor.ProcessAsync(tmp.Data, false, CancellationToken.None);
+                await processor.ProcessAsync(tmp.FilePath, false, CancellationToken.None);
             }
             catch (Exception)
             {
@@ -185,7 +185,7 @@ namespace GithubActionPinner.Core.Tests
             var processor = new WorkflowActionProcessor(repoBrowser.Object, parser, mock.Object);
             try
             {
-                await processor.ProcessAsync(tmp.Data, false, CancellationToken.None);
+                await processor.ProcessAsync(tmp.FilePath, false, CancellationToken.None);
             }
             catch (Exception)
             {
@@ -193,10 +193,54 @@ namespace GithubActionPinner.Core.Tests
             }
         }
 
-        private DisposableWrapper<string> ExtractAndTransformDataFileTemporarily(string name, string action)
+        [DataTestMethod]
+        [DataRow("invalid-but-parsable.yml", 2)]
+        [DataRow("test.yml", 3)]
+        [DataRow("all-reference-types.yml", 2)]
+        public async Task CheckingFileShouldNotModifyIt(string file, int updates)
+        {
+            using var tmp = ExtractDataFileTemporarily(file);
+
+            var mock = new Mock<ILogger<WorkflowActionProcessor>>();
+            var repoBrowser = new Mock<IGithubRepositoryBrowser>();
+            repoBrowser
+                .Setup(x => x.IsRepositoryAccessibleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult(true));
+            var parser = new ActionParser(repoBrowser.Object);
+            var processor = new WorkflowActionProcessor(repoBrowser.Object, parser, mock.Object);
+            var original = await File.ReadAllTextAsync(tmp.FilePath, CancellationToken.None);
+            try
+            {
+                await processor.ProcessAsync(tmp.FilePath, false, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                Assert.Fail("should not throw");
+            }
+            var modified = await File.ReadAllTextAsync(tmp.FilePath, CancellationToken.None);
+            Assert.AreEqual(original, modified, "because check should not update the file");
+            repoBrowser.Verify(x => x.IsRepositoryAccessibleAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(updates));
+        }
+
+        /// <summary>
+        /// Given an embedded resource in the Data dir with the specific name will extract its content to a temporary file and return its path.
+        /// Dispose the returned object to automatically clean up the file.
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="action">The name to insert into the file (assumes the file has a hardcoded placeholder __ACTION__)</param>
+        /// <returns></returns>
+        private DisposableFileWrapper<string> ExtractAndTransformDataFileTemporarily(string name, string action)
             => ExtractAndTransformDataFileTemporarily(name, "__ACTION__", action);
 
-        private DisposableWrapper<string> ExtractAndTransformDataFileTemporarily(string name, string toReplace, string action)
+        /// <summary>
+        /// Given an embedded resource in the Data dir with the specific name will extract its content to a temporary file and return its path.
+        /// Dispose the returned object to automatically clean up the file.
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="toReplace">The string in the file to replace with the action</param>
+        /// <param name="action">The name to insert into the file in place of <see cref="toReplace"/></param>
+        /// <returns></returns>
+        private DisposableFileWrapper<string> ExtractAndTransformDataFileTemporarily(string name, string toReplace, string action)
         {
             var tmp = Path.GetTempFileName();
             using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(typeof(WorkflowActionProcessorTests).Namespace + ".Data." + name))
@@ -206,7 +250,7 @@ namespace GithubActionPinner.Core.Tests
             if (!string.IsNullOrEmpty(toReplace))
                 File.WriteAllText(tmp, File.ReadAllText(tmp).Replace(toReplace, action));
 
-            return new DisposableWrapper<string>(() =>
+            return new DisposableFileWrapper<string>(() =>
             {
                 try
                 {
@@ -218,19 +262,23 @@ namespace GithubActionPinner.Core.Tests
             }, tmp);
         }
 
-        private DisposableWrapper<string> ExtractDataFileTemporarily(string name)
+        /// <summary>
+        /// Given an embedded resource in the Data dir with the specific name will extract its content to a temporary file and return its path.
+        /// Dispose the returned object to automatically clean up the file.
+        /// </summary>
+        private DisposableFileWrapper<string> ExtractDataFileTemporarily(string name)
             => ExtractAndTransformDataFileTemporarily(name, null, "");
 
-        private class DisposableWrapper<T> : IDisposable
+        private class DisposableFileWrapper<T> : IDisposable
         {
             private readonly Action _action;
 
-            public T Data { get; }
+            public T FilePath { get; }
 
-            public DisposableWrapper(Action action, T data)
+            public DisposableFileWrapper(Action action, T data)
             {
                 _action = action;
-                Data = data;
+                FilePath = data;
             }
 
             public void Dispose()
