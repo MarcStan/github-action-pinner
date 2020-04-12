@@ -24,7 +24,7 @@ namespace GithubActionPinner.Core
             // https://developer.github.com/v3/#current-version
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github.v3+json"));
             // https://developer.github.com/v3/#user-agent-required
-            _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("GithubActionPinner", "v1"));
+            _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MarcStan%2Fgithub-action-pinner", "v1"));
             if (oauthToken != null)
                 _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", oauthToken);
         }
