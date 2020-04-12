@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace GithubActionPinner
 {
-    public static class Program
+    public class Program
     {
         public static async Task<int> Main(string[] args)
         {
@@ -79,10 +79,22 @@ namespace GithubActionPinner
             using (var sp = services.BuildServiceProvider())
             {
                 var processor = sp.GetRequiredService<WorkflowActionProcessor>();
+                var logger = sp.GetRequiredService<ILogger<Program>>();
                 var update = mode == Mode.Update;
                 foreach (var file in filesToProcess)
                 {
-                    await processor.ProcessAsync(file, update, cancellationToken);
+                    try
+                    {
+                        await processor.ProcessAsync(file, update, cancellationToken);
+                    }
+                    catch (GithubApiRatelimitExceededException ex)
+                    {
+                        logger.LogError(ex.Message);
+                        if (!ex.WasAuthenticated)
+                            logger.LogError("For unauthenticated requests the ratelimit is rather low, consider authenticating with a personal access token: https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line to increase your limit.");
+                        // TODO: if cache is introduced all other files could be processed and may even be up to date
+                        break;
+                    }
                 }
             }
         }

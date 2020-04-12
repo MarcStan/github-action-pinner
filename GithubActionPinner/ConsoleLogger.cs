@@ -12,7 +12,21 @@ namespace GithubActionPinner
             => true;
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
-            => Console.WriteLine(formatter(state, exception));
+        {
+            var old = Console.ForegroundColor;
+            var desired = logLevel switch
+            {
+                LogLevel.Warning => ConsoleColor.Yellow,
+                LogLevel.Error => ConsoleColor.Red,
+                LogLevel.Critical => ConsoleColor.DarkRed,
+                _ => old
+            };
+            if (old != desired)
+                Console.ForegroundColor = desired;
+            Console.WriteLine(formatter(state, exception));
+
+            Console.ForegroundColor = old;
+        }
     }
 
     public class ConsoleLoggerProvider : ILoggerProvider

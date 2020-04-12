@@ -32,6 +32,7 @@ namespace GithubActionPinner.Core
         public async Task<bool> IsRepositoryAccessibleAsync(string owner, string repository, CancellationToken cancellationToken)
         {
             var response = await _httpClient.GetAsync($"repos/{owner}/{repository}", cancellationToken);
+            CheckRateLimit(response);
             return response.StatusCode == System.Net.HttpStatusCode.OK;
         }
 
@@ -145,6 +146,7 @@ namespace GithubActionPinner.Core
         public async Task<T> GetAsync<T>(string url, CancellationToken cancellationToken)
         {
             var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            CheckRateLimit(response);
             response.EnsureSuccessStatusCode();
             return await JsonSerializer.DeserializeAsync<T>(await response.Content.ReadAsStreamAsync().ConfigureAwait(false)).ConfigureAwait(false);
         }
@@ -155,7 +157,7 @@ namespace GithubActionPinner.Core
         /// https://www.w3.org/wiki/LinkHeader
         /// Expects the response to be of type array.
         /// </summary>
-        public IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, CancellationToken cancellationToken)
+        private IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, CancellationToken cancellationToken)
             => GetPaginatedAsync(url, e => JsonSerializer.Deserialize<T[]>(e.GetRawText()), cancellationToken);
 
         /// <summary>
@@ -165,7 +167,7 @@ namespace GithubActionPinner.Core
         /// Expects the to be an object with a property of type array (e.g. { total: 7, values: "" }
         /// </summary>
         /// <param name="propertyName">The name of the property where the array is stored, in the example it would be "values".</param>
-        public IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, string propertyName, CancellationToken cancellationToken)
+        private IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, string propertyName, CancellationToken cancellationToken)
             => GetPaginatedAsync(url, e => JsonSerializer.Deserialize<T[]>(e.GetProperty(propertyName).GetRawText()), cancellationToken);
 
         private async IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, Func<JsonElement, T[]> map, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -174,6 +176,7 @@ namespace GithubActionPinner.Core
             do
             {
                 var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+                CheckRateLimit(response);
                 response.EnsureSuccessStatusCode();
                 var results = map(await JsonSerializer.DeserializeAsync<JsonElement>(
                     await response.Content.ReadAsStreamAsync().ConfigureAwait(false),
@@ -218,6 +221,25 @@ namespace GithubActionPinner.Core
                 }
             }
             while (nextLink != null);
+        }
+
+        private void CheckRateLimit(HttpResponseMessage response)
+        {
+            if (response.StatusCode != System.Net.HttpStatusCode.Forbidden)
+                return;
+
+            var limitString = response.Headers.GetValues("X-Ratelimit-Limit").FirstOrDefault();
+            var remainingString = response.Headers.GetValues("X-Ratelimit-Remaining").FirstOrDefault();
+            var resetString = response.Headers.GetValues("X-Ratelimit-Reset").FirstOrDefault();
+            var isAuthenticated = _httpClient.DefaultRequestHeaders.Authorization != null;
+            if (!int.TryParse(limitString, out int limit) ||
+               !int.TryParse(remainingString, out int remaining) ||
+               !long.TryParse(resetString, out long reset))
+            {
+                throw new GithubApiRatelimitExceededException(0, 0, DateTimeOffset.MaxValue, isAuthenticated, $"Failed to parse rate limit response. Received: Limit: {limitString}, Remaining: {remainingString}, Reset time (unix): {resetString}. See https://developer.github.com/v3/#rate-limiting for details.");
+            }
+            var dto = DateTimeOffset.FromUnixTimeSeconds(reset);
+            throw new GithubApiRatelimitExceededException(remaining, limit, dto, isAuthenticated, $"Github api rate limit has been exceeded ({remaining}/{limit} api calls remaining), will reset {dto}. See https://developer.github.com/v3/#rate-limiting for details.");
         }
 
         private class TagContainer
