@@ -1,10 +1,11 @@
-﻿using GithubActionPinner.Core.Extensions;
-using GithubActionPinner.Core.Models.Github;
+﻿using GithubActionPinner.Core.Models.Github;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -36,7 +37,7 @@ namespace GithubActionPinner.Core
 
         public async Task<string> GetRepositoryDefaultBranchAsync(string owner, string repository, CancellationToken cancellationToken)
         {
-            var repo = await _httpClient.GetAsync<GithubRepository>($"repos/{owner}/{repository}", cancellationToken);
+            var repo = await GetAsync<GithubRepository>($"repos/{owner}/{repository}", cancellationToken);
             return repo.DefaultBranch;
         }
 
@@ -73,7 +74,7 @@ namespace GithubActionPinner.Core
         private async Task<(string tag, string sha)?> GetLargestSemVerCompliantTagAsync(string owner, string repository, Version currentVersion, CancellationToken cancellationToken)
         {
             var semVerCompliant = new List<TagContainer>();
-            await foreach (var gitRef in _httpClient.GetPaginatedAsync<GitRef>($"repos/{owner}/{repository}/git/refs/tags", cancellationToken))
+            await foreach (var gitRef in GetPaginatedAsync<GitRef>($"repos/{owner}/{repository}/git/refs/tags", cancellationToken))
             {
                 var tag = gitRef.Ref.Substring("refs/tags/".Length);
 
@@ -126,11 +127,11 @@ namespace GithubActionPinner.Core
             switch (gitRef.Object.Type)
             {
                 case "commit":
-                    var commit = await _httpClient.GetAsync<GithubCommit>(gitRef.Object.Url, cancellationToken).ConfigureAwait(false);
+                    var commit = await GetAsync<GithubCommit>(gitRef.Object.Url, cancellationToken).ConfigureAwait(false);
                     return (gitRef.Object.Sha, commit.Author.Date);
                 case "tag":
                     // type tag is not a lightweight tag -> it contains the link to the actual commit
-                    var tag = await _httpClient.GetAsync<GithubTag>(gitRef.Object.Url, cancellationToken).ConfigureAwait(false);
+                    var tag = await GetAsync<GithubTag>(gitRef.Object.Url, cancellationToken).ConfigureAwait(false);
                     // resolve actual commit
                     return await GetCommitAsync(owner, repository, new GitRef
                     {
@@ -139,6 +140,84 @@ namespace GithubActionPinner.Core
                 default:
                     throw new NotSupportedException($"Expected a tag to resolve its commit. {gitRef.Object.Type} is unuspported.");
             }
+        }
+
+        public async Task<T> GetAsync<T>(string url, CancellationToken cancellationToken)
+        {
+            var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            return await JsonSerializer.DeserializeAsync<T>(await response.Content.ReadAsStreamAsync().ConfigureAwait(false)).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Fetches results from an api endpoint and if said endpoint returns
+        /// RFC'd next links then keeps following them (and aggregating the results).
+        /// https://www.w3.org/wiki/LinkHeader
+        /// Expects the response to be of type array.
+        /// </summary>
+        public IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, CancellationToken cancellationToken)
+            => GetPaginatedAsync(url, e => JsonSerializer.Deserialize<T[]>(e.GetRawText()), cancellationToken);
+
+        /// <summary>
+        /// Fetches results from an api endpoint and if said endpoint returns
+        /// RFC'd next links then keeps following them (and aggregating the results).
+        /// https://www.w3.org/wiki/LinkHeader
+        /// Expects the to be an object with a property of type array (e.g. { total: 7, values: "" }
+        /// </summary>
+        /// <param name="propertyName">The name of the property where the array is stored, in the example it would be "values".</param>
+        public IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, string propertyName, CancellationToken cancellationToken)
+            => GetPaginatedAsync(url, e => JsonSerializer.Deserialize<T[]>(e.GetProperty(propertyName).GetRawText()), cancellationToken);
+
+        private async IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, Func<JsonElement, T[]> map, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            string? nextLink = null;
+            do
+            {
+                var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                var results = map(await JsonSerializer.DeserializeAsync<JsonElement>(
+                    await response.Content.ReadAsStreamAsync().ConfigureAwait(false),
+                    cancellationToken: cancellationToken).ConfigureAwait(false));
+
+                foreach (var r in results)
+                    yield return r;
+
+                if (response.Headers.TryGetValues("Link", out var values))
+                {
+                    nextLink = values
+                        .Select(v =>
+                        {
+                            // content as per spec: https://developer.github.com/v3/#link-header
+                            // Link: <https://api.github.com/user/repos?page=3&per_page=100>; rel="next", < https://api.github.com/user/repos?page=50&per_page=100>; rel="last", ...
+                            // only care for rel="next" link
+
+                            if (string.IsNullOrEmpty(v) ||
+                                !v.Contains(","))
+                                return null;
+
+                            foreach (var hyperlinkSections in v.Split(','))
+                            {
+                                if (!hyperlinkSections.Contains(";"))
+                                    continue;
+                                var parts = hyperlinkSections.Split(';');
+                                if (!parts[1].Trim().Equals("rel=\"next\"", StringComparison.OrdinalIgnoreCase))
+                                    continue;
+
+                                return parts[0].Trim().TrimStart('<').TrimEnd('>');
+                            }
+                            return null;
+                        })
+                        .Where(x => x != null)
+                        .FirstOrDefault();
+                    if (nextLink != null)
+                    {
+                        url = nextLink;
+                        if (url.StartsWith(_httpClient.BaseAddress.ToString(), StringComparison.OrdinalIgnoreCase))
+                            url = url.Substring(_httpClient.BaseAddress.ToString().Length);
+                    }
+                }
+            }
+            while (nextLink != null);
         }
 
         private class TagContainer
