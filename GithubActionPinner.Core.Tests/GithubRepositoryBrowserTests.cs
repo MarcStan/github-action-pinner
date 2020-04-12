@@ -11,7 +11,7 @@ namespace GithubActionPinner.Core.Tests
         /// <summary>
         /// https://help.github.com/en/actions/configuring-and-managing-workflows/authenticating-with-the-github_token
         /// </summary>
-        private static string _token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        private static readonly string _token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
 
         [DataTestMethod]
         [DataRow("MarcStan", "github-action-pinner", true)]
@@ -34,7 +34,7 @@ namespace GithubActionPinner.Core.Tests
             }
             catch (GithubApiRatelimitExceededException ex)
             {
-                Assert.Fail($"Github api ratelimit exceeded ({ex.Ratelimit} calls per hour). " +
+                Assert.Fail(ex.Message +
                     "If you are running locally, consider setting a personal access token with `repo` permissions as `GITHUB_TOKEN` environment variable");
             }
         }
