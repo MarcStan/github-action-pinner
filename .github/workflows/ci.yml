@@ -6,6 +6,7 @@ on:
 env:
   SemVer: 0.1.0
   Project: GithubActionPinner
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
 
 jobs:
   build:
@@ -21,6 +22,8 @@ jobs:
     - run: echo "::set-env name=Version::${{ env.SemVer }}.${{ GITHUB.RUN_NUMBER }}"
     - run: dotnet build -c Release
     - run: dotnet test --no-build -c Release
+      with:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     - run: dotnet publish --no-build -c Release ${{ env.Project }}/${{ env.Project }}.csproj -o release/${{ env.Project }} /p:Version=${{ env.Version }}
     - uses: actions/upload-artifact@3446296876d12d4e3a0f3145a3c87e67bf0a16b5 # pin@v1 
       with:
