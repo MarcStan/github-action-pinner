@@ -45,19 +45,25 @@ namespace GithubActionPinner.Core.Tests
             try
             {
                 await task();
-
-                // does not count against rate limit
-                var response = await _httpClient.GetAsync("https://api.github.com/rate_limit");
-                response.EnsureSuccessStatusCode();
-                var obj = await JsonSerializer.DeserializeAsync<RatelimitResponse>(await response.Content.ReadAsStreamAsync());
-                var c = obj.Resources.Core;
-                // as per https://github.com/actions/toolkit/blob/1725272151f6cc845f4ae86a925c31860c2b7beb/packages/core/src/command.ts#L16
-                Console.WriteLine($"##[warning]{c.Remaining}/{c.Limit} api calls remaining (resets {c.Reset}). If you have been running the tests a lot, expect them to start failing soon.");
             }
             catch (GithubApiRatelimitExceededException ex)
             {
                 Assert.Fail(ex.Message +
                     "If you are running locally, consider setting a personal access token with `repo` permissions as `GITHUB_TOKEN` environment variable");
+            }
+            finally
+            {
+                // does not count against rate limit so we can always run it (even if ratelimit has been hit already)
+                var response = await _httpClient.GetAsync("https://api.github.com/rate_limit");
+                response.EnsureSuccessStatusCode();
+                var obj = await JsonSerializer.DeserializeAsync<RatelimitResponse>(await response.Content.ReadAsStreamAsync());
+                var c = obj.Resources.Core;
+                // issue when getting close to rate limit
+                if (c.Remaining < 100 || c.Remaining < c.Limit / 10.0)
+                {
+                    // as per https://github.com/actions/toolkit/blob/1725272151f6cc845f4ae86a925c31860c2b7beb/packages/core/src/command.ts#L16
+                    Console.WriteLine($"##[warning]{c.Remaining}/{c.Limit} api calls remaining (resets {c.Reset}). If you have been running the tests a lot, expect them to start failing soon.");
+                }
             }
         }
 
