@@ -51,7 +51,8 @@ namespace GithubActionPinner.Core.Tests
                 response.EnsureSuccessStatusCode();
                 var obj = await JsonSerializer.DeserializeAsync<RatelimitResponse>(await response.Content.ReadAsStreamAsync());
                 var c = obj.Resources.Core;
-                Console.WriteLine($"WARNING: {c.Remaining}/{c.Limit} api calls remaining (resets {c.Reset}). If you have been running the tests a lot, expect them to start failing soon.");
+                // as per https://github.com/actions/toolkit/blob/1725272151f6cc845f4ae86a925c31860c2b7beb/packages/core/src/command.ts#L16
+                Console.WriteLine($"##[warning]{c.Remaining}/{c.Limit} api calls remaining (resets {c.Reset}). If you have been running the tests a lot, expect them to start failing soon.");
             }
             catch (GithubApiRatelimitExceededException ex)
             {
