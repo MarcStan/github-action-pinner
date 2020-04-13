@@ -10,6 +10,11 @@
     <None Remove="Data\invalid-but-parsable.yml" />
     <None Remove="Data\one-action-transformed.yml" />
     <None Remove="Data\test.yml" />
+    <None Remove="Data\trustCommit.trusted" />
+    <None Remove="Data\trustNoOne.trusted" />
+    <None Remove="Data\trustOrg.trusted" />
+    <None Remove="Data\trustRepo.trusted" />
+    <None Remove="Data\trustSome.trusted" />
   </ItemGroup>
 
   <ItemGroup>
@@ -17,6 +22,11 @@
     <EmbeddedResource Include="Data\all-reference-types.yml" />
     <EmbeddedResource Include="Data\one-action-transformed.yml" />
     <EmbeddedResource Include="Data\test.yml" />
+    <EmbeddedResource Include="Data\trustSome.trusted" />
+    <EmbeddedResource Include="Data\trustRepo.trusted" />
+    <EmbeddedResource Include="Data\trustCommit.trusted" />
+    <EmbeddedResource Include="Data\trustOrg.trusted" />
+    <EmbeddedResource Include="Data\trustNoOne.trusted" />
   </ItemGroup>
 
   <ItemGroup>

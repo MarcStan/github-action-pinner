@@ -48,6 +48,7 @@ In which case the command will recursively scan all folders and processes all fi
 * are stored in .github/workflows and
 * end with .yml or .yaml
 
+See [Configuration](./docs/Configuration.md) for details on trusting actions/commits.
 
 # Why you should avoiding non-SHA action references
 

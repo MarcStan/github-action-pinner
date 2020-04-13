@@ -1,4 +1,5 @@
-﻿using GithubActionPinner.Core.Models;
+﻿using GithubActionPinner.Core.Config;
+using GithubActionPinner.Core.Models;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
@@ -12,13 +13,16 @@ namespace GithubActionPinner.Core
         private readonly ILogger _logger;
         private readonly IGithubRepositoryBrowser _githubRepositoryBrowser;
         private readonly IActionParser _actionParser;
+        private readonly IActionConfig _trustedActions;
 
         public WorkflowActionProcessor(
             IGithubRepositoryBrowser githubRepositoryBrowser,
+            IActionConfig trustedActions,
             IActionParser actionParser,
             ILogger<WorkflowActionProcessor> logger)
         {
             _githubRepositoryBrowser = githubRepositoryBrowser;
+            _trustedActions = trustedActions;
             _actionParser = actionParser;
             _logger = logger;
         }
@@ -50,22 +54,30 @@ namespace GithubActionPinner.Core
                 var currentVersion = actionReference.Pinned?.ReferenceVersion ?? actionReference.ReferenceVersion;
                 // each type can either be already pinned or not
                 var type = actionReference.Pinned?.ReferenceType ?? actionReference.ReferenceType;
-                switch (type)
+                if (_trustedActions.IsRepositoryTrusted(actionReference.Owner, actionReference.Repository))
                 {
-                    case ActionReferenceType.Branch:
-                        var branchName = currentVersion;
-                        referenceResolver = async (token) => (branchName, await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token));
-                        break;
-                    case ActionReferenceType.Tag:
-                        var tag = currentVersion;
-                        referenceResolver = async (token) => await _githubRepositoryBrowser.GetLatestSemVerCompliantAsync(actionReference.Owner, actionReference.Repository, tag, token);
-                        break;
-                    case ActionReferenceType.Sha:
-                        // makes no sense to be pinned
-                        _logger.LogInformation($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is not pinned. Cannot determine version, switch to a version or add a comment '# @<version>'");
-                        continue;
-                    default:
-                        throw new ArgumentOutOfRangeException(type.ToString());
+                    // no need to pin trusted actions
+                    // TODO: for tags we should issue warning if they can be updated to a new major version
+                    continue;
+                }
+                else
+                {
+                    switch (type)
+                    {
+                        case ActionReferenceType.Branch:
+                            var branchName = currentVersion;
+                            referenceResolver = async (token) => (branchName, await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token));
+                            break;
+                        case ActionReferenceType.Tag:
+                            referenceResolver = async (token) => await _githubRepositoryBrowser.GetLatestSemVerCompliantAsync(actionReference.Owner, actionReference.Repository, currentVersion, token);
+                            break;
+                        case ActionReferenceType.Sha:
+                            // makes no sense to be pinned
+                            _logger.LogInformation($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is not pinned. Cannot determine version, switch to a version or add a comment '# @<version>'");
+                            continue;
+                        default:
+                            throw new ArgumentOutOfRangeException(type.ToString());
+                    }
                 }
 
                 if (!await _githubRepositoryBrowser.IsRepositoryAccessibleAsync(actionReference.Owner, actionReference.Repository, cancellationToken))
@@ -83,7 +95,7 @@ namespace GithubActionPinner.Core
                 {
                     var (tagOrBranch, sha) = response.Value;
                     var existingRef = actionReference.Pinned?.ReferenceVersion ?? actionReference.ReferenceVersion;
-                    var desired = $"updated {existingRef} -> {tagOrBranch}";
+                    var updateDescription = $"updated {existingRef} -> {tagOrBranch}";
                     if (existingRef == tagOrBranch)
                     {
                         if (actionReference.Pinned != null &&
@@ -97,16 +109,20 @@ namespace GithubActionPinner.Core
 
                         // modify wording depending on first pin or update of SHA
                         var updateType = actionReference.Pinned == null ? "using" : "updated to";
-                        desired = $"pinned to {existingRef} ({updateType} SHA {sha})";
+                        updateDescription = $"pinned to {existingRef} ({updateType} SHA {sha})";
+                    }
+                    if (!_trustedActions.IsCommitAudited(actionReference.Owner, actionReference.Repository, sha))
+                    {
+                        _logger.LogWarning($"Consider adding '{actionReference.ActionName}/{sha}' to the audit log once you have audited the code!");
                     }
                     if (update)
                     {
                         lines[i] = UpdateLine(lines[i], actionReference, sha, tagOrBranch);
-                        _logger.LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' was {desired}.");
+                        _logger.LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' was {updateDescription}.");
                     }
                     else
                     {
-                        _logger.LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' can be {desired}.");
+                        _logger.LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' can be {updateDescription}.");
                     }
                 }
             }

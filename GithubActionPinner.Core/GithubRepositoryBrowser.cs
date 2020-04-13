@@ -160,16 +160,6 @@ namespace GithubActionPinner.Core
         private IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, CancellationToken cancellationToken)
             => GetPaginatedAsync(url, e => JsonSerializer.Deserialize<T[]>(e.GetRawText()), cancellationToken);
 
-        /// <summary>
-        /// Fetches results from an api endpoint and if said endpoint returns
-        /// RFC'd next links then keeps following them (and aggregating the results).
-        /// https://www.w3.org/wiki/LinkHeader
-        /// Expects the to be an object with a property of type array (e.g. { total: 7, values: "" }
-        /// </summary>
-        /// <param name="propertyName">The name of the property where the array is stored, in the example it would be "values".</param>
-        private IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, string propertyName, CancellationToken cancellationToken)
-            => GetPaginatedAsync(url, e => JsonSerializer.Deserialize<T[]>(e.GetProperty(propertyName).GetRawText()), cancellationToken);
-
         private async IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, Func<JsonElement, T[]> map, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             string? nextLink = null;
