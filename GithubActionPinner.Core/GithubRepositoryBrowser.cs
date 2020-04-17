@@ -61,20 +61,19 @@ namespace GithubActionPinner.Core
         /// Will list all tags and finds tag v1 is on a newer commit -> returns its sha
         /// Will list all tags and finds tag v1 and v1.2 (v1 is on a newer commit) -> returns its sha
         /// </example>
-        public async Task<(string tag, string sha)?> GetLatestSemVerCompliantAsync(string owner, string repository, string tag, CancellationToken cancellationToken)
+        public async Task<(string latestTag, string latestSemVerCompliantTag, string latestSemVerCompliantSha)?> GetAvailableUpdatesAsync(string owner, string repository, string tag, CancellationToken cancellationToken)
         {
-            if (!tag.StartsWith("v", StringComparison.OrdinalIgnoreCase))
-                throw new NotSupportedException($"Unsupported version tag {tag}");
-
             if (!VersionHelper.TryParse(tag, out var version))
                 throw new NotSupportedException($"Unsupported version tag {tag} (not a parsable version)");
 
             return await GetLargestSemVerCompliantTagAsync(owner, repository, version, cancellationToken);
         }
 
-        private async Task<(string tag, string sha)?> GetLargestSemVerCompliantTagAsync(string owner, string repository, Version currentVersion, CancellationToken cancellationToken)
+        private async Task<(string latestTag, string latestSemVerCompliantTag, string latestSemVerCompliantSha)?> GetLargestSemVerCompliantTagAsync(string owner, string repository, Version currentVersion, CancellationToken cancellationToken)
         {
             var semVerCompliant = new List<TagContainer>();
+            Version? max = null;
+            string? maxTag = null;
             await foreach (var gitRef in GetPaginatedAsync<GitRef>($"repos/{owner}/{repository}/git/refs/tags", cancellationToken))
             {
                 var tag = gitRef.Ref.Substring("refs/tags/".Length);
@@ -83,6 +82,12 @@ namespace GithubActionPinner.Core
                 if (!VersionHelper.TryParse(tag, out var tagVersion))
                     continue;
 
+                if (max == null || tagVersion > max)
+                {
+                    maxTag = tag;
+                    max = tagVersion;
+                }
+
                 if (tagVersion.Major != currentVersion.Major)
                     continue;
 
@@ -90,6 +95,8 @@ namespace GithubActionPinner.Core
             }
             if (!semVerCompliant.Any())
                 return null; // would be quite problematic in most cases as no version exists anymore
+
+            var maxVersion = maxTag ?? throw new InvalidProgramException("compiler");
 
             // response order reflects tag creation date NOT semVer order
             var latest = semVerCompliant.OrderByDescending(x => x.Version).First();
@@ -102,7 +109,7 @@ namespace GithubActionPinner.Core
             if (major == null ||
                 // however SHA can only be identical when both tags are lightweight and point to the same commit
                 major.GitRef.Object.Sha == latest.GitRef.Object.Sha)
-                return ((major ?? latest).Tag, latest.GitRef.Object.Sha);
+                return (maxVersion, (major ?? latest).Tag, latest.GitRef.Object.Sha);
 
             // one (or both) tags may be regular tags (with their own sha)
             // in which case we need to resolve the underlying commit sha to compare
@@ -117,10 +124,10 @@ namespace GithubActionPinner.Core
                 // someone to purposefully create a newer commit with an older date..
                 majorCommit.createdAt > latestCommit.createdAt)
             {
-                return (major.Tag, majorCommit.sha);
+                return (maxVersion, major.Tag, majorCommit.sha);
             }
 
-            return (latest.Tag, latestCommit.sha);
+            return (maxVersion, latest.Tag, latestCommit.sha);
         }
 
         private async Task<(string sha, DateTimeOffset createdAt)> GetCommitAsync(string owner, string repository, GitRef gitRef, CancellationToken cancellationToken)

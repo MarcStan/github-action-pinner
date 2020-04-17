@@ -110,6 +110,7 @@ namespace GithubActionPinner
                         break;
                     }
                 }
+                processor.Summarize();
             }
         }
 

@@ -27,9 +27,9 @@ namespace GithubActionPinner.Core.Tests
             repoBrowser
                 .Setup(x => x.IsRepositoryAccessibleAsync(owner, repo, It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(true));
-            (string, string)? response = (latestVersion, latestSha);
+            (string, string, string)? response = (latestVersion, latestVersion, latestSha);
             repoBrowser
-                .Setup(x => x.GetLatestSemVerCompliantAsync(owner, repo, currentVersion, It.IsAny<CancellationToken>()))
+                .Setup(x => x.GetAvailableUpdatesAsync(owner, repo, currentVersion, It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(response));
             repoBrowser
                 .Setup(x => x.GetShaForLatestCommitAsync(owner, repo, latestVersion, It.IsAny<CancellationToken>()))
@@ -67,7 +67,7 @@ namespace GithubActionPinner.Core.Tests
             // can be tag or branch
             if (!string.IsNullOrEmpty(currentVersion) && VersionHelper.TryParse(currentVersion, out _))
             {
-                repoBrowser.Verify(x => x.GetLatestSemVerCompliantAsync(owner, repo, currentVersion, It.IsAny<CancellationToken>()), Times.Once);
+                repoBrowser.Verify(x => x.GetAvailableUpdatesAsync(owner, repo, currentVersion, It.IsAny<CancellationToken>()), Times.Once);
                 // tags shouldn't query default branch
                 repoBrowser.Verify(x => x.GetRepositoryDefaultBranchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
             }
@@ -89,9 +89,9 @@ namespace GithubActionPinner.Core.Tests
             repoBrowser
                 .Setup(x => x.IsRepositoryAccessibleAsync(owner, repo, It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(true));
-            (string, string)? response = (latestVersion, latestSha);
+            (string, string, string)? response = (latestVersion, latestVersion, latestSha);
             repoBrowser
-                .Setup(x => x.GetLatestSemVerCompliantAsync(owner, repo, currentVersion, It.IsAny<CancellationToken>()))
+                .Setup(x => x.GetAvailableUpdatesAsync(owner, repo, currentVersion, It.IsAny<CancellationToken>()))
                 .Returns(Task.FromResult(response));
             repoBrowser
                 .Setup(x => x.GetShaForLatestCommitAsync(owner, repo, latestVersion, It.IsAny<CancellationToken>()))
@@ -123,7 +123,7 @@ namespace GithubActionPinner.Core.Tests
             repoBrowser.Verify(x => x.IsRepositoryAccessibleAsync(owner, repo, It.IsAny<CancellationToken>()), Times.Once);
             // can be tag or branch
             if (!string.IsNullOrEmpty(currentVersion) && VersionHelper.TryParse(currentVersion, out _))
-                repoBrowser.Verify(x => x.GetLatestSemVerCompliantAsync(owner, repo, currentVersion, It.IsAny<CancellationToken>()), Times.Once);
+                repoBrowser.Verify(x => x.GetAvailableUpdatesAsync(owner, repo, currentVersion, It.IsAny<CancellationToken>()), Times.Once);
             else
                 repoBrowser.Verify(x => x.GetShaForLatestCommitAsync(owner, repo, latestVersion, It.IsAny<CancellationToken>()), Times.Once);
         }

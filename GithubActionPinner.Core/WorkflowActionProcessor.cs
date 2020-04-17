@@ -2,6 +2,7 @@
 using GithubActionPinner.Core.Models;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,6 +15,7 @@ namespace GithubActionPinner.Core
         private readonly IGithubRepositoryBrowser _githubRepositoryBrowser;
         private readonly IActionParser _actionParser;
         private readonly IActionConfig _trustedActions;
+        private readonly Dictionary<string, string> _summary = new Dictionary<string, string>();
 
         public WorkflowActionProcessor(
             IGithubRepositoryBrowser githubRepositoryBrowser,
@@ -49,7 +51,7 @@ namespace GithubActionPinner.Core
                     continue;
                 }
 
-                Func<CancellationToken, Task<(string namedReference, string sha)?>> referenceResolver;
+                Func<CancellationToken, Task<(string latest, string namedReference, string sha)?>> referenceResolver;
 
                 var currentVersion = actionReference.Pinned?.ReferenceVersion ?? actionReference.ReferenceVersion;
                 // each type can either be already pinned or not
@@ -57,7 +59,14 @@ namespace GithubActionPinner.Core
                 if (_trustedActions.IsRepositoryTrusted(actionReference.Owner, actionReference.Repository))
                 {
                     // no need to pin trusted actions
-                    // TODO: for tags we should issue warning if they can be updated to a new major version
+                    // but check incase a new major version is available
+                    var tagResponse = await _githubRepositoryBrowser.GetAvailableUpdatesAsync(actionReference.Owner, actionReference.Repository, currentVersion, cancellationToken);
+                    if (tagResponse != null &&
+                        tagResponse.Value.latestTag != tagResponse.Value.latestSemVerCompliantTag &&
+                        tagResponse.Value.latestSemVerCompliantSha != currentVersion)
+                    {
+                        _logger.LogWarning($"Action '{actionReference.ActionName}@{currentVersion}' can be updated to {tagResponse.Value.latestTag}.");
+                    }
                     continue;
                 }
                 else
@@ -66,10 +75,10 @@ namespace GithubActionPinner.Core
                     {
                         case ActionReferenceType.Branch:
                             var branchName = currentVersion;
-                            referenceResolver = async (token) => (branchName, await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token));
+                            referenceResolver = async (token) => (branchName, branchName, await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token));
                             break;
                         case ActionReferenceType.Tag:
-                            referenceResolver = async (token) => await _githubRepositoryBrowser.GetLatestSemVerCompliantAsync(actionReference.Owner, actionReference.Repository, currentVersion, token);
+                            referenceResolver = async (token) => await _githubRepositoryBrowser.GetAvailableUpdatesAsync(actionReference.Owner, actionReference.Repository, currentVersion, token);
                             break;
                         case ActionReferenceType.Sha:
                             // makes no sense to be pinned
@@ -87,13 +96,13 @@ namespace GithubActionPinner.Core
                     continue;
                 }
                 var response = await referenceResolver(cancellationToken);
-                if (response == null)
+                if (!response.HasValue)
                 {
                     _logger.LogTrace($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is already up to date.");
                 }
                 else
                 {
-                    var (tagOrBranch, sha) = response.Value;
+                    var (latestVersion, tagOrBranch, sha) = response.Value;
                     var existingRef = actionReference.Pinned?.ReferenceVersion ?? actionReference.ReferenceVersion;
                     var updateDescription = $"updated {existingRef} -> {tagOrBranch}";
                     if (existingRef == tagOrBranch)
@@ -111,10 +120,6 @@ namespace GithubActionPinner.Core
                         var updateType = actionReference.Pinned == null ? "using" : "updated to";
                         updateDescription = $"pinned to {existingRef} ({updateType} SHA {sha})";
                     }
-                    if (!_trustedActions.IsCommitAudited(actionReference.Owner, actionReference.Repository, sha))
-                    {
-                        _logger.LogWarning($"Consider adding '{actionReference.ActionName}/{sha}' to the audit log once you have audited the code!");
-                    }
                     if (update)
                     {
                         lines[i] = UpdateLine(lines[i], actionReference, sha, tagOrBranch);
@@ -123,6 +128,12 @@ namespace GithubActionPinner.Core
                     else
                     {
                         _logger.LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' can be {updateDescription}.");
+                    }
+                    if (!_trustedActions.IsCommitAudited(actionReference.Owner, actionReference.Repository, sha))
+                    {
+                        var message = $"Consider adding '{actionReference.ActionName}/{sha}' to the audit log once you have audited the code!";
+                        _summary[$"{actionReference.Owner}/{actionReference.Repository}/{sha}".ToLowerInvariant()] = message;
+                        _logger.LogWarning("  " + message);
                     }
                 }
             }
@@ -138,6 +149,14 @@ namespace GithubActionPinner.Core
             {
                 await File.WriteAllLinesAsync(file, lines, cancellationToken);
             }
+        }
+
+        public void Summarize()
+        {
+            Console.WriteLine();
+            Console.WriteLine("Summary:");
+            foreach (var entry in _summary)
+                Console.WriteLine(entry.Value);
         }
 
         private string UpdateLine(string line, ActionReference actionReference, string sha, string pinned)
