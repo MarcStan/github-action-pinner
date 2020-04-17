@@ -10,11 +10,12 @@ By default actions that are pinned result in a warning:
 
 > Consider trusting 'actions/checkout/01aecccf739ca6ff86c0539fbc67a7a5007bbc81' by adding it to the config once you have audited the code.
 
-In the config file add this text to trust the specific commit hash (after you have reviewed the code). Multiple hashes can be added across many repositories.
+In the config file add this text to trust the specific commit hash (after you have reviewed the code).
 
 ```
 actions/checkout/01aecccf739ca6ff86c0539fbc67a7a5007bbc81
 ```
+Multiple hashes can be added across many repositories by adding multipe lines.
 
 Adding a commit merely prevents the warning from showing up when running an update on future actions.
 
@@ -22,7 +23,7 @@ The idea is: You check for action updates and are shown the warning. After revie
 
 Running the check/update command again will no longer issue a warning for the trusted commit.
 
-Update of the action reference to point to the sha will still be performed.
+Update of the action reference to point to the sha will still be performed but you will no longer see a warning in the console.
 
 ## Trusting organizations/repositories
 
@@ -33,9 +34,11 @@ actions
 nuget/setup-nuget
 ```
 
-The config will trust all actions from `actions` organization and also trusts the `nuget/setup-nuget`.
+The config above will trust all actions from `actions` organization and also trusts the `nuget/setup-nuget`.
 
-Note that when trusting actions or organizations their actions will no longer be updated to use the commit hash values and are instead updated to their respective latest semver compliant version.
+Note that when trusting actions or organizations their actions will no longer be updated to use the commit hash values and are instead updated to their respective latest semver compliant version or branch.
+
+**Note:** This is less secure than trusting a specific commit as any one [compromised account with contributor access](Security.md) to the org/repo can still gain access to your pipeline.
 
 ## Example
 
