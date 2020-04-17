@@ -70,6 +70,14 @@ namespace GithubActionPinner.Core
             return await GetLargestSemVerCompliantTagAsync(owner, repository, version, cancellationToken);
         }
 
+        public async Task<T> GetAsync<T>(string url, CancellationToken cancellationToken)
+        {
+            var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            CheckRateLimit(response);
+            response.EnsureSuccessStatusCode();
+            return await JsonSerializer.DeserializeAsync<T>(await response.Content.ReadAsStreamAsync().ConfigureAwait(false)).ConfigureAwait(false);
+        }
+
         private async Task<(string latestTag, string latestSemVerCompliantTag, string latestSemVerCompliantSha)?> GetLargestSemVerCompliantTagAsync(string owner, string repository, Version currentVersion, CancellationToken cancellationToken)
         {
             var semVerCompliant = new List<TagContainer>();
@@ -149,14 +157,6 @@ namespace GithubActionPinner.Core
                 default:
                     throw new NotSupportedException($"Expected a tag to resolve its commit. {gitRef.Object.Type} is unuspported.");
             }
-        }
-
-        public async Task<T> GetAsync<T>(string url, CancellationToken cancellationToken)
-        {
-            var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
-            CheckRateLimit(response);
-            response.EnsureSuccessStatusCode();
-            return await JsonSerializer.DeserializeAsync<T>(await response.Content.ReadAsStreamAsync().ConfigureAwait(false)).ConfigureAwait(false);
         }
 
         /// <summary>

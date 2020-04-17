@@ -31,6 +31,7 @@ namespace GithubActionPinner.Core
 
         public async Task ProcessAsync(string file, bool update, CancellationToken cancellationToken)
         {
+            _logger.LogInformation("");
             _logger.LogInformation($"{(update ? "Updating" : "Checking")} actions in '{file}':");
             int updates = 0;
             // could parse file for validity but string manipulation is much easier #famousLastWords
@@ -150,10 +151,6 @@ namespace GithubActionPinner.Core
             if (updates > 0)
             {
                 _logger.LogInformation($"{updates} actions {(update ? "have been updated" : "need to be updated")}.");
-            }
-            else
-            {
-                _logger.LogInformation("No sem ver compliant action updates found.");
             }
             if (update)
             {
