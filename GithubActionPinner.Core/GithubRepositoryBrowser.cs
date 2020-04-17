@@ -45,9 +45,10 @@ namespace GithubActionPinner.Core
         /// <summary>
         /// For a given branch name gets the SHA of the latest commit on it.
         /// </summary>
-        public Task<string> GetShaForLatestCommitAsync(string owner, string repository, string branchName, CancellationToken cancellationToken)
+        public async Task<string> GetShaForLatestCommitAsync(string owner, string repository, string branchName, CancellationToken cancellationToken)
         {
-            throw new NotImplementedException();
+            var bi = await GetAsync<BranchInfo>($"repos/{owner}/{repository}/branches/{branchName}", cancellationToken);
+            return bi.Commit.Sha;
         }
 
         /// <summary>

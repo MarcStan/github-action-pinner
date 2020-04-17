@@ -129,21 +129,31 @@ namespace GithubActionPinner.Core
                     {
                         _logger.LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' can be {updateDescription}.");
                     }
+                    if (latestVersion != null &&
+                        type == ActionReferenceType.Tag &&
+                        latestVersion != tagOrBranch &&
+                        VersionHelper.TryParse(latestVersion, out var latest) &&
+                        VersionHelper.TryParse(tagOrBranch, out var target) &&
+                        latest.Major != target.Major)
+                    {
+                        // warn about major upgrades in summary (user must perform them manually)
+                        _summary[$"{actionReference.ActionName}/{latestVersion}".ToLowerInvariant()] =
+                            $"Action '{actionReference.ActionName}@{currentVersion}' can be manually upgraded to {latestVersion} (possibly contains breaking changes).";
+                    }
                     if (!_trustedActions.IsCommitAudited(actionReference.Owner, actionReference.Repository, sha))
                     {
-                        var message = $"Consider adding '{actionReference.ActionName}/{sha}' to the audit log once you have audited the code!";
-                        _summary[$"{actionReference.Owner}/{actionReference.Repository}/{sha}".ToLowerInvariant()] = message;
-                        _logger.LogWarning("  " + message);
+                        _summary[$"{actionReference.ActionName}/{sha}".ToLowerInvariant()] =
+                            $"Consider adding '{actionReference.ActionName}/{sha}' ({tagOrBranch}) to the audit log once you have audited the code!";
                     }
                 }
             }
             if (updates > 0)
             {
-                _logger.LogInformation($"{updates} action versions {(update ? "have been updated" : "need to be updated")}.");
+                _logger.LogInformation($"{updates} actions {(update ? "have been updated" : "need to be updated")}.");
             }
             else
             {
-                _logger.LogInformation("No action updates found.");
+                _logger.LogInformation("No sem ver compliant action updates found.");
             }
             if (update)
             {
@@ -153,10 +163,10 @@ namespace GithubActionPinner.Core
 
         public void Summarize()
         {
-            Console.WriteLine();
-            Console.WriteLine("Summary:");
+            _logger.LogInformation("");
+            _logger.LogInformation("Summary:");
             foreach (var entry in _summary)
-                Console.WriteLine(entry.Value);
+                _logger.LogWarning(entry.Value);
         }
 
         private string UpdateLine(string line, ActionReference actionReference, string sha, string pinned)
