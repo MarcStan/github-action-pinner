@@ -21,7 +21,7 @@ namespace GithubActionPinner.Core.Tests
         public async Task RepositoryAccessShouldBeLimitedToPublicAndOwnedRepositories(string owner, string repo, bool expected)
             => await RateLimitHandler(async () =>
             {
-                IGithubRepositoryBrowser browser = new GithubRepositoryBrowser(_token);
+                IGithubRepositoryBrowser browser = new GithubRepositoryBrowser(new CachedGithubApi(_token));
                 var isAccessible = await browser.IsRepositoryAccessibleAsync(owner, repo, CancellationToken.None);
                 Assert.AreEqual(expected, isAccessible);
             });

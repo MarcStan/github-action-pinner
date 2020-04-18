@@ -44,8 +44,9 @@ namespace GithubActionPinner
                    .AddLogging(builder => builder.AddProvider(new ConsoleLoggerProvider()))
                    .AddTransient<IActionConfig, ActionConfig>()
                    .AddTransient<IActionParser, ActionParser>()
+                   .AddSingleton(new CachedGithubApi(githubApiToken))
                    .AddTransient<WorkflowActionProcessor>()
-                   .AddSingleton(_ => (IGithubRepositoryBrowser)new GithubRepositoryBrowser(githubApiToken));
+                   .AddTransient<IGithubRepositoryBrowser, GithubRepositoryBrowser>();
         }
 
         private static async Task RunAsync(IConfiguration configuration, CancellationToken cancellationToken)

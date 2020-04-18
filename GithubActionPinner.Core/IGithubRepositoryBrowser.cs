@@ -3,6 +3,9 @@ using System.Threading.Tasks;
 
 namespace GithubActionPinner.Core
 {
+    /// <summary>
+    /// Helper to fetch repository relevant data from github api.
+    /// </summary>
     public interface IGithubRepositoryBrowser
     {
         /// <summary>
