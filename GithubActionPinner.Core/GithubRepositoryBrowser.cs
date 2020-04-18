@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
@@ -19,7 +20,7 @@ namespace GithubActionPinner.Core
         public async Task<bool> IsRepositoryAccessibleAsync(string owner, string repository, CancellationToken cancellationToken)
         {
             var response = await _cache.GetAsync($"repos/{owner}/{repository}", cancellationToken).ConfigureAwait(false);
-            return response.StatusCode == System.Net.HttpStatusCode.OK;
+            return response.StatusCode == HttpStatusCode.OK;
         }
 
         public async Task<string> GetRepositoryDefaultBranchAsync(string owner, string repository, CancellationToken cancellationToken)
@@ -67,7 +68,8 @@ namespace GithubActionPinner.Core
         {
             var response = await _cache.GetAsync(url, cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            return await JsonSerializer.DeserializeAsync<T>(await response.Content.ReadAsStreamAsync().ConfigureAwait(false)).ConfigureAwait(false);
+
+            return await JsonSerializer.DeserializeAsync<T>(response.Content).ConfigureAwait(false);
         }
 
         private async Task<(string latestTag, string latestSemVerCompliantTag, string latestSemVerCompliantSha)?> GetLargestSemVerCompliantTagAsync(string owner, string repository, Version currentVersion, CancellationToken cancellationToken)

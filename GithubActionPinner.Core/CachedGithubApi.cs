@@ -1,4 +1,5 @@
-﻿using System;
+﻿using GithubActionPinner.Core.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -15,6 +16,7 @@ namespace GithubActionPinner.Core
     /// </summary>
     public class CachedGithubApi
     {
+        private readonly Dictionary<string, HttpResponse> _cache = new Dictionary<string, HttpResponse>();
         private readonly HttpClient _httpClient;
 
         public CachedGithubApi(string? oauthToken)
@@ -31,11 +33,26 @@ namespace GithubActionPinner.Core
                 _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", oauthToken);
         }
 
-        public async Task<HttpResponseMessage> GetAsync(string url, CancellationToken cancellationToken)
+        public async Task<HttpResponse> GetAsync(string url, CancellationToken cancellationToken)
         {
+            var key = GetKey(url);
+            if (_cache.ContainsKey(key))
+            {
+                var cached = _cache[key];
+                cached.Content.Position = 0;
+                return cached;
+            }
+
             var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
-            CheckRateLimit(response);
-            return response;
+            var toCache = await CacheAsync(response).ConfigureAwait(false);
+            CheckRateLimit(toCache);
+            return _cache[key] = toCache;
+        }
+
+        private async Task<HttpResponse> CacheAsync(HttpResponseMessage response)
+        {
+            var content = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+            return new HttpResponse(response.StatusCode, response.Headers, content);
         }
 
         /// <summary>
@@ -44,20 +61,18 @@ namespace GithubActionPinner.Core
         /// https://www.w3.org/wiki/LinkHeader
         /// Expects the response to be of type array.
         /// </summary>
-        public IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, CancellationToken cancellationToken)
-            => GetPaginatedAsync(url, e => JsonSerializer.Deserialize<T[]>(e.GetRawText()), cancellationToken);
-
-        private async IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, Func<JsonElement, T[]> map, [EnumeratorCancellation] CancellationToken cancellationToken)
+        public async IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
+            // TODO: cache
             string? nextLink = null;
             do
             {
                 var response = await GetAsync(url, cancellationToken).ConfigureAwait(false);
                 CheckRateLimit(response);
                 response.EnsureSuccessStatusCode();
-                var results = map(await JsonSerializer.DeserializeAsync<JsonElement>(
-                    await response.Content.ReadAsStreamAsync().ConfigureAwait(false),
-                    cancellationToken: cancellationToken).ConfigureAwait(false));
+                var results = await JsonSerializer.DeserializeAsync<T[]>(
+                    response.Content,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 foreach (var r in results)
                     yield return r;
@@ -101,7 +116,7 @@ namespace GithubActionPinner.Core
             while (nextLink != null);
         }
 
-        private void CheckRateLimit(HttpResponseMessage response)
+        private void CheckRateLimit(HttpResponse response)
         {
             if (response.StatusCode != System.Net.HttpStatusCode.Forbidden)
                 return;
@@ -119,5 +134,8 @@ namespace GithubActionPinner.Core
             var dto = DateTimeOffset.FromUnixTimeSeconds(reset);
             throw new GithubApiRatelimitExceededException(remaining, limit, dto, isAuthenticated, $"Github api rate limit has been exceeded ({remaining}/{limit} api calls remaining), will reset {dto}. See https://developer.github.com/v3/#rate-limiting for details.");
         }
+
+        private string GetKey(string url)
+            => url.ToLowerInvariant();
     }
 }
