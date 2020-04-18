@@ -105,7 +105,7 @@ namespace GithubActionPinner.Core
                 if (!await _githubRepositoryBrowser.IsRepositoryAccessibleAsync(actionReference.Owner, actionReference.Repository, cancellationToken).ConfigureAwait(false))
                 {
                     // cannot pin repos without access, so skip
-                    _summaryLogger.LogWarning(actionReference.ActionName, $"Could not find action {actionReference.ActionName}, repo is private or removed. Skipping..");
+                    _summaryLogger.LogError(actionReference.ActionName, $"Could not find action {actionReference.ActionName}, repo is private or removed. Skipping..");
                     continue;
                 }
                 var response = await referenceResolver(cancellationToken).ConfigureAwait(false);
