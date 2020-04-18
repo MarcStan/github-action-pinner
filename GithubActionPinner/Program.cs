@@ -17,6 +17,26 @@ namespace GithubActionPinner
     {
         public static async Task<int> Main(string[] args)
         {
+            if (args.Length == 0 || IsHelp(args[0]))
+            {
+                Console.WriteLine("Usage:");
+                Console.WriteLine("<exe> --update file|folder [--token GH_TOKEN]");
+                Console.WriteLine("");
+                Console.WriteLine("  Checks the file/folder for actions to update.");
+                Console.WriteLine("  Folder will be searched recursively for *.yml/*.yaml files in all '.github/workflows' directories.");
+                Console.WriteLine("  Each action file is parsed for actions and github api is called to check for available updates");
+                Console.WriteLine("");
+                Console.WriteLine("  Token is optional but encouraged due to githubs ratelimit (token requires repo permissions)");
+                Console.WriteLine();
+                Console.WriteLine();
+                Console.WriteLine("<exe> --check file|folder [--token GH_TOKEN]");
+                Console.WriteLine("");
+                Console.WriteLine("  Same as update but no files will actually be modified. Results will only be printed to console.");
+                Console.WriteLine();
+                Console.WriteLine();
+                Console.WriteLine($"{ExeName()}.trusted can be used to trust orgs/actions or specific commits. Place the file next to the exe and add one entry per line to trust them.");
+                return 0;
+            }
             var cts = new CancellationTokenSource();
             Console.CancelKeyPress += (s, e) => cts.Cancel();
 
@@ -37,6 +57,9 @@ namespace GithubActionPinner
                 return -2;
             }
         }
+
+        private static bool IsHelp(string arg)
+            => new[] { "-h", "--help", "/help" }.Contains(arg.ToLowerInvariant());
 
         private static IServiceCollection SetupDI(string? githubApiToken)
         {
@@ -88,8 +111,7 @@ namespace GithubActionPinner
             var logger = sp.GetRequiredService<ILogger<Program>>();
             var update = mode == Mode.Update;
             var config = sp.GetRequiredService<IActionConfig>();
-            var exeName = Path.GetFileNameWithoutExtension(typeof(Program).Assembly.Location);
-            var fileName = $"{exeName}.trusted";
+            var fileName = $"{ExeName()}.trusted";
             string configFile = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".", fileName);
             // config file is optional
             if (File.Exists(configFile))
@@ -120,6 +142,9 @@ namespace GithubActionPinner
             }
             processor.Summarize();
         }
+
+        private static string ExeName()
+            => Path.GetFileNameWithoutExtension(typeof(Program).Assembly.Location);
 
         private static (string fileOrFolder, Mode mode, string? githubApiToken) ParseArguments(IConfiguration configuration)
         {
