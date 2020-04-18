@@ -2,7 +2,6 @@
 using GithubActionPinner.Core.Models;
 using Microsoft.Extensions.Logging;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,11 +10,12 @@ namespace GithubActionPinner.Core
 {
     public class WorkflowActionProcessor
     {
-        private readonly ILogger _logger;
+        private readonly LogCollector _auditLogger;
+        private readonly LogCollector _summaryLogger;
         private readonly IGithubRepositoryBrowser _githubRepositoryBrowser;
         private readonly IActionParser _actionParser;
         private readonly IActionConfig _trustedActions;
-        private readonly Dictionary<string, string> _auditSummary = new Dictionary<string, string>();
+        private readonly ILogger<WorkflowActionProcessor> _logger;
 
         public WorkflowActionProcessor(
             IGithubRepositoryBrowser githubRepositoryBrowser,
@@ -27,12 +27,15 @@ namespace GithubActionPinner.Core
             _trustedActions = trustedActions;
             _actionParser = actionParser;
             _logger = logger;
+
+            _auditLogger = new LogCollector(logger);
+            _summaryLogger = new LogCollector(logger);
         }
 
         public async Task ProcessAsync(string file, bool update, CancellationToken cancellationToken)
         {
-            _logger.LogInformation("");
-            _logger.LogInformation($"{(update ? "Updating" : "Checking")} actions in '{file}':");
+            LogInformation("");
+            LogInformation($"{(update ? "Updating" : "Checking")} actions in '{file}':");
             int updates = 0;
             // could parse file for validity but string manipulation is much easier #famousLastWords
             var lines = await File.ReadAllLinesAsync(file, cancellationToken).ConfigureAwait(false);
@@ -48,7 +51,7 @@ namespace GithubActionPinner.Core
                 }
                 catch (NotSupportedException ex)
                 {
-                    _logger.LogWarning($"Skipping invalid line #{i}: {ex.Message}");
+                    _summaryLogger.LogWarning($"{file}/{i}", $"Skipping invalid line #{i}: {ex.Message}");
                     continue;
                 }
 
@@ -64,12 +67,12 @@ namespace GithubActionPinner.Core
                     var tagResponse = await _githubRepositoryBrowser.GetAvailableUpdatesAsync(actionReference.Owner, actionReference.Repository, currentVersion, cancellationToken).ConfigureAwait(false);
                     if (tagResponse == null)
                     {
-                        _logger.LogError($"Action '{actionReference.ActionName}' has no tags. Cannot update!");
+                        _summaryLogger.LogError($"{actionReference.ActionName}", $"Action '{actionReference.ActionName}' has no tags. Cannot update!");
                     }
                     else if (tagResponse.Value.latestTag != tagResponse.Value.latestSemVerCompliantTag &&
-                        tagResponse.Value.latestSemVerCompliantSha != currentVersion)
+                             tagResponse.Value.latestSemVerCompliantSha != currentVersion)
                     {
-                        _logger.LogWarning($"Action '{actionReference.ActionName}@{currentVersion}' can be updated to {tagResponse.Value.latestTag}.");
+                        _summaryLogger.LogWarning($"{actionReference.ActionName}@{currentVersion}", $"Action '{actionReference.ActionName}@{currentVersion}' can be updated to {tagResponse.Value.latestTag}.");
                     }
                     continue;
                 }
@@ -92,7 +95,7 @@ namespace GithubActionPinner.Core
                             break;
                         case ActionReferenceType.Sha:
                             // makes no sense to be pinned
-                            _logger.LogInformation($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is not pinned. Cannot determine version, switch to a version or add a comment '# @<version>'");
+                            LogInformation($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is not pinned. Cannot determine version, switch to a version or add a comment '# @<version>'");
                             continue;
                         default:
                             throw new ArgumentOutOfRangeException(type.ToString());
@@ -102,13 +105,13 @@ namespace GithubActionPinner.Core
                 if (!await _githubRepositoryBrowser.IsRepositoryAccessibleAsync(actionReference.Owner, actionReference.Repository, cancellationToken).ConfigureAwait(false))
                 {
                     // cannot pin repos without access, so skip
-                    _logger.LogWarning($"Could not find action {actionReference.ActionName}, repo is private or removed. Skipping..");
+                    _summaryLogger.LogWarning(actionReference.ActionName, $"Could not find action {actionReference.ActionName}, repo is private or removed. Skipping..");
                     continue;
                 }
                 var response = await referenceResolver(cancellationToken).ConfigureAwait(false);
                 if (!response.HasValue)
                 {
-                    _logger.LogError($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' has no version that exists anymore. Cannot update!");
+                    _summaryLogger.LogError(actionReference.ActionName, $"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' has no version that exists anymore. Cannot update!");
                 }
                 else
                 {
@@ -134,11 +137,11 @@ namespace GithubActionPinner.Core
                     if (update)
                     {
                         lines[i] = UpdateLine(lines[i], actionReference, sha, tagOrBranch);
-                        _logger.LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' was {updateDescription}.");
+                        LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' was {updateDescription}.");
                     }
                     else
                     {
-                        _logger.LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' can be {updateDescription}.");
+                        LogInformation($"(Line {i + 1}): Action '{actionReference.ActionName}' can be {updateDescription}.");
                     }
                     if (latestVersion != null &&
                         type == ActionReferenceType.Tag &&
@@ -148,18 +151,17 @@ namespace GithubActionPinner.Core
                         latest.Major != target.Major)
                     {
                         // warn about major upgrades (user must perform them manually)
-                        _logger.LogWarning($"Action '{actionReference.ActionName}@{currentVersion}' can be upgraded to {latestVersion} (perform upgrade manually due to possible breaking changes).");
+                        _summaryLogger.LogWarning($"{actionReference.ActionName}@{currentVersion}", $"Action '{actionReference.ActionName}@{currentVersion}' can be upgraded to {latestVersion} (perform upgrade manually due to possible breaking changes).");
                     }
                     if (!_trustedActions.IsCommitAudited(actionReference.Owner, actionReference.Repository, sha))
                     {
-                        _auditSummary[$"{actionReference.ActionName}/{sha}".ToLowerInvariant()] =
-                            $"Consider adding '{actionReference.ActionName}/{sha}' ({tagOrBranch}) to the audit log once you have audited the code!";
+                        _auditLogger.LogWarning($"{actionReference.ActionName}/{sha}", $"Consider adding '{actionReference.ActionName}/{sha}' ({tagOrBranch}) to the audit log once you have audited the code!");
                     }
                 }
             }
             if (updates > 0)
             {
-                _logger.LogInformation($"{updates} actions {(update ? "have been updated" : "need to be updated")}.");
+                LogInformation($"{updates} actions {(update ? "have been updated" : "need to be updated")}.");
             }
             if (update)
             {
@@ -167,12 +169,18 @@ namespace GithubActionPinner.Core
             }
         }
 
+        private void LogInformation(string message)
+            => _logger.LogInformation(message);
+
         public void Summarize()
         {
-            _logger.LogInformation("");
-            _logger.LogInformation("Audit summary:");
-            foreach (var entry in _auditSummary)
-                _logger.LogWarning(entry.Value);
+            LogInformation("");
+            LogInformation("Issues:");
+            _summaryLogger.Summarize();
+
+            LogInformation("");
+            LogInformation("Audit summary:");
+            _auditLogger.Summarize();
         }
 
         private string UpdateLine(string line, ActionReference actionReference, string sha, string pinned)
