@@ -73,7 +73,9 @@ namespace GithubActionPinner.Core
 
                             if (string.IsNullOrEmpty(v) ||
                                 !v.Contains(","))
+                            {
                                 return null;
+                            }
 
                             foreach (var hyperlinkSections in v.Split(','))
                             {
@@ -87,8 +89,7 @@ namespace GithubActionPinner.Core
                             }
                             return null;
                         })
-                        .Where(x => x != null)
-                        .FirstOrDefault();
+                        .FirstOrDefault(x => x != null);
                     if (nextLink != null)
                     {
                         url = nextLink;

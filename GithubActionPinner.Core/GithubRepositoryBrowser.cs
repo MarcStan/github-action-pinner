@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,10 +31,17 @@ namespace GithubActionPinner.Core
         /// <summary>
         /// For a given branch name gets the SHA of the latest commit on it.
         /// </summary>
-        public async Task<string> GetShaForLatestCommitAsync(string owner, string repository, string branchName, CancellationToken cancellationToken)
+        public async Task<string?> GetShaForLatestCommitAsync(string owner, string repository, string branchName, CancellationToken cancellationToken)
         {
-            var bi = await GetAsync<BranchInfo>($"repos/{owner}/{repository}/branches/{branchName}", cancellationToken).ConfigureAwait(false);
-            return bi.Commit.Sha;
+            try
+            {
+                var branchInfo = await GetAsync<BranchInfo>($"repos/{owner}/{repository}/branches/{branchName}", cancellationToken).ConfigureAwait(false);
+                return branchInfo.Commit.Sha;
+            }
+            catch (HttpRequestException)
+            {
+                return null;
+            }
         }
 
         /// <summary>
@@ -86,41 +94,43 @@ namespace GithubActionPinner.Core
 
                 semVerCompliant.Add(new TagContainer(gitRef, tagVersion, tag));
             }
-            if (!semVerCompliant.Any())
-                return null; // would be quite problematic in most cases as no version exists anymore
+            if (semVerCompliant.Count == 0)
+                return null; // would be quite problematic in most cases as no version exists anymore, just ignore as we can't update
 
             var maxVersion = maxTag ?? throw new InvalidProgramException("compiler");
 
             // response order reflects tag creation date NOT semVer order
-            var latest = semVerCompliant.OrderByDescending(x => x.Version).First();
+            var latestCommitByVersion = semVerCompliant.OrderByDescending(x => x.Version).First();
 
             // "v1" type tag may not necessarily exist
             // if it does we prefer it as it is recommended in the documentation 
-            var major = semVerCompliant.SingleOrDefault(r => r.Tag.Equals($"v{currentVersion.Major}", StringComparison.OrdinalIgnoreCase));
+            var majorTag = semVerCompliant.SingleOrDefault(r => r.Tag.Equals($"v{currentVersion.Major}", StringComparison.OrdinalIgnoreCase));
 
             // both tags may point to the same commit
-            if (major == null ||
+            if (majorTag == null ||
                 // however SHA can only be identical when both tags are lightweight and point to the same commit
-                major.GitRef.Object.Sha == latest.GitRef.Object.Sha)
-                return (maxVersion, (major ?? latest).Tag, latest.GitRef.Object.Sha);
+                majorTag.GitRef.Object.Sha == latestCommitByVersion.GitRef.Object.Sha)
+            {
+                return (maxVersion, (majorTag ?? latestCommitByVersion).Tag, latestCommitByVersion.GitRef.Object.Sha);
+            }
 
             // one (or both) tags may be regular tags (with their own sha)
             // in which case we need to resolve the underlying commit sha to compare
 
-            var majorCommit = await GetCommitAsync(owner, repository, major.GitRef, cancellationToken).ConfigureAwait(false);
-            var latestCommit = await GetCommitAsync(owner, repository, latest.GitRef, cancellationToken).ConfigureAwait(false);
+            var (majorSha, majorCreatedAt) = await GetCommitAsync(owner, repository, majorTag.GitRef, cancellationToken).ConfigureAwait(false);
+            var (LatestSha, latestCreatedAt) = await GetCommitAsync(owner, repository, latestCommitByVersion.GitRef, cancellationToken).ConfigureAwait(false);
 
             // if both point to the same commit or the major format points to a newer commit we pick the major as refernece
-            if (majorCommit.sha == latestCommit.sha ||
+            if (majorSha == LatestSha ||
                 // TODO: possibly buggy because git commit creation date can be changed
                 // however accept the edgecase as "not supported" as it would require
                 // someone to purposefully create a newer commit with an older date..
-                majorCommit.createdAt > latestCommit.createdAt)
+                majorCreatedAt > latestCreatedAt)
             {
-                return (maxVersion, major.Tag, majorCommit.sha);
+                return (maxVersion, majorTag.Tag, majorSha);
             }
 
-            return (maxVersion, latest.Tag, latestCommit.sha);
+            return (maxVersion, latestCommitByVersion.Tag, LatestSha);
         }
 
         private async Task<(string sha, DateTimeOffset createdAt)> GetCommitAsync(string owner, string repository, GitRef gitRef, CancellationToken cancellationToken)

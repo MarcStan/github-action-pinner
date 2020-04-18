@@ -15,7 +15,7 @@ namespace GithubActionPinner.Core
         private readonly IGithubRepositoryBrowser _githubRepositoryBrowser;
         private readonly IActionParser _actionParser;
         private readonly IActionConfig _trustedActions;
-        private readonly Dictionary<string, string> _summary = new Dictionary<string, string>();
+        private readonly Dictionary<string, string> _auditSummary = new Dictionary<string, string>();
 
         public WorkflowActionProcessor(
             IGithubRepositoryBrowser githubRepositoryBrowser,
@@ -35,7 +35,7 @@ namespace GithubActionPinner.Core
             _logger.LogInformation($"{(update ? "Updating" : "Checking")} actions in '{file}':");
             int updates = 0;
             // could parse file for validity but string manipulation is much easier #famousLastWords
-            var lines = await File.ReadAllLinesAsync(file, cancellationToken);
+            var lines = await File.ReadAllLinesAsync(file, cancellationToken).ConfigureAwait(false);
             for (int i = 0; i < lines.Length; i++)
             {
                 if (!HasActionReference(lines[i]))
@@ -44,7 +44,7 @@ namespace GithubActionPinner.Core
                 ActionReference actionReference;
                 try
                 {
-                    actionReference = await _actionParser.ParseActionAsync(lines[i], cancellationToken);
+                    actionReference = await _actionParser.ParseActionAsync(lines[i], cancellationToken).ConfigureAwait(false);
                 }
                 catch (NotSupportedException ex)
                 {
@@ -61,9 +61,12 @@ namespace GithubActionPinner.Core
                 {
                     // no need to pin trusted actions
                     // but check incase a new major version is available
-                    var tagResponse = await _githubRepositoryBrowser.GetAvailableUpdatesAsync(actionReference.Owner, actionReference.Repository, currentVersion, cancellationToken);
-                    if (tagResponse != null &&
-                        tagResponse.Value.latestTag != tagResponse.Value.latestSemVerCompliantTag &&
+                    var tagResponse = await _githubRepositoryBrowser.GetAvailableUpdatesAsync(actionReference.Owner, actionReference.Repository, currentVersion, cancellationToken).ConfigureAwait(false);
+                    if (tagResponse == null)
+                    {
+                        _logger.LogError($"Action '{actionReference.ActionName}' has no tags. Cannot update!");
+                    }
+                    else if (tagResponse.Value.latestTag != tagResponse.Value.latestSemVerCompliantTag &&
                         tagResponse.Value.latestSemVerCompliantSha != currentVersion)
                     {
                         _logger.LogWarning($"Action '{actionReference.ActionName}@{currentVersion}' can be updated to {tagResponse.Value.latestTag}.");
@@ -76,10 +79,16 @@ namespace GithubActionPinner.Core
                     {
                         case ActionReferenceType.Branch:
                             var branchName = currentVersion;
-                            referenceResolver = async (token) => (branchName, branchName, await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token));
+                            referenceResolver = async (token) =>
+                            {
+                                var sha = await _githubRepositoryBrowser.GetShaForLatestCommitAsync(actionReference.Owner, actionReference.Repository, branchName, token).ConfigureAwait(false);
+                                if (sha == null)
+                                    return null; // branch no longer exists?
+                                return (branchName, branchName, sha);
+                            };
                             break;
                         case ActionReferenceType.Tag:
-                            referenceResolver = async (token) => await _githubRepositoryBrowser.GetAvailableUpdatesAsync(actionReference.Owner, actionReference.Repository, currentVersion, token);
+                            referenceResolver = async (token) => await _githubRepositoryBrowser.GetAvailableUpdatesAsync(actionReference.Owner, actionReference.Repository, currentVersion, token).ConfigureAwait(false);
                             break;
                         case ActionReferenceType.Sha:
                             // makes no sense to be pinned
@@ -90,16 +99,16 @@ namespace GithubActionPinner.Core
                     }
                 }
 
-                if (!await _githubRepositoryBrowser.IsRepositoryAccessibleAsync(actionReference.Owner, actionReference.Repository, cancellationToken))
+                if (!await _githubRepositoryBrowser.IsRepositoryAccessibleAsync(actionReference.Owner, actionReference.Repository, cancellationToken).ConfigureAwait(false))
                 {
                     // cannot pin repos without access, so skip
                     _logger.LogWarning($"Could not find action {actionReference.ActionName}, repo is private or removed. Skipping..");
                     continue;
                 }
-                var response = await referenceResolver(cancellationToken);
+                var response = await referenceResolver(cancellationToken).ConfigureAwait(false);
                 if (!response.HasValue)
                 {
-                    _logger.LogTrace($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' is already up to date.");
+                    _logger.LogError($"Action '{actionReference.ActionName}@{actionReference.ReferenceVersion}' has no version that exists anymore. Cannot update!");
                 }
                 else
                 {
@@ -121,6 +130,7 @@ namespace GithubActionPinner.Core
                         var updateType = actionReference.Pinned == null ? "using" : "updated to";
                         updateDescription = $"pinned to {existingRef} ({updateType} SHA {sha})";
                     }
+                    updates++;
                     if (update)
                     {
                         lines[i] = UpdateLine(lines[i], actionReference, sha, tagOrBranch);
@@ -137,13 +147,12 @@ namespace GithubActionPinner.Core
                         VersionHelper.TryParse(tagOrBranch, out var target) &&
                         latest.Major != target.Major)
                     {
-                        // warn about major upgrades in summary (user must perform them manually)
-                        _summary[$"{actionReference.ActionName}/{latestVersion}".ToLowerInvariant()] =
-                            $"Action '{actionReference.ActionName}@{currentVersion}' can be manually upgraded to {latestVersion} (possibly contains breaking changes).";
+                        // warn about major upgrades (user must perform them manually)
+                        _logger.LogWarning($"Action '{actionReference.ActionName}@{currentVersion}' can be upgraded to {latestVersion} (perform upgrade manually due to possible breaking changes).");
                     }
                     if (!_trustedActions.IsCommitAudited(actionReference.Owner, actionReference.Repository, sha))
                     {
-                        _summary[$"{actionReference.ActionName}/{sha}".ToLowerInvariant()] =
+                        _auditSummary[$"{actionReference.ActionName}/{sha}".ToLowerInvariant()] =
                             $"Consider adding '{actionReference.ActionName}/{sha}' ({tagOrBranch}) to the audit log once you have audited the code!";
                     }
                 }
@@ -154,15 +163,15 @@ namespace GithubActionPinner.Core
             }
             if (update)
             {
-                await File.WriteAllLinesAsync(file, lines, cancellationToken);
+                await File.WriteAllLinesAsync(file, lines, cancellationToken).ConfigureAwait(false);
             }
         }
 
         public void Summarize()
         {
             _logger.LogInformation("");
-            _logger.LogInformation("Summary:");
-            foreach (var entry in _summary)
+            _logger.LogInformation("Audit summary:");
+            foreach (var entry in _auditSummary)
                 _logger.LogWarning(entry.Value);
         }
 

@@ -28,7 +28,7 @@ namespace GithubActionPinner
             Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
             try
             {
-                await RunAsync(configuration, cts.Token);
+                await RunAsync(configuration, cts.Token).ConfigureAwait(false);
                 return 0;
             }
             catch (Exception ex)
@@ -62,12 +62,15 @@ namespace GithubActionPinner
                     {
                         if (!f.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) &&
                             !f.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+                        {
                             return false;
+                        }
+
                         return Path.GetDirectoryName(f)?.Replace("\\", "/")?.EndsWith(".github/workflows", StringComparison.OrdinalIgnoreCase) ?? false;
                     })
                     .ToArray();
 
-                if (!filesToProcess.Any())
+                if (filesToProcess.Length == 0)
                     throw new ArgumentException($"No matching action files found in directory '{fileOrFolder}'.");
             }
             else
@@ -80,39 +83,37 @@ namespace GithubActionPinner
 
             var services = SetupDI(token);
 
-            using (var sp = services.BuildServiceProvider())
+            using var sp = services.BuildServiceProvider();
+            var processor = sp.GetRequiredService<WorkflowActionProcessor>();
+            var logger = sp.GetRequiredService<ILogger<Program>>();
+            var update = mode == Mode.Update;
+            var config = sp.GetRequiredService<IActionConfig>();
+            const string fileName = "GithubActionPinner.trusted";
+            string configFile = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "", fileName);
+            // config file is optional
+            if (File.Exists(configFile))
             {
-                var processor = sp.GetRequiredService<WorkflowActionProcessor>();
-                var logger = sp.GetRequiredService<ILogger<Program>>();
-                var update = mode == Mode.Update;
-                var config = sp.GetRequiredService<IActionConfig>();
-                const string fileName = "GithubActionPinner.trusted";
-                string configFile = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "", fileName);
-                // config file is optional
-                if (File.Exists(configFile))
-                {
-                    config.Load(configFile);
-                }
-                foreach (var file in filesToProcess)
-                {
-                    try
-                    {
-                        await processor.ProcessAsync(file, update, cancellationToken);
-                    }
-                    catch (GithubApiRatelimitExceededException ex)
-                    {
-                        logger.LogError(ex.Message);
-                        if (!ex.WasAuthenticated)
-                        {
-                            logger.LogError("For unauthenticated requests the ratelimit is rather low, consider authenticating with a personal access token: https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line to increase your limit.");
-                            logger.LogError("Pass the token either via `--token` argument or set it as the `GITHUB_TOKEN` environment variable.");
-                        }
-                        // TODO: if cache is introduced all other files could be processed and may even be up to date
-                        break;
-                    }
-                }
-                processor.Summarize();
+                config.Load(configFile);
             }
+            foreach (var file in filesToProcess)
+            {
+                try
+                {
+                    await processor.ProcessAsync(file, update, cancellationToken).ConfigureAwait(false);
+                }
+                catch (GithubApiRatelimitExceededException ex)
+                {
+                    logger.LogError(ex.Message);
+                    if (!ex.WasAuthenticated)
+                    {
+                        logger.LogError("For unauthenticated requests the ratelimit is rather low, consider authenticating with a personal access token: https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line to increase your limit.");
+                        logger.LogError("Pass the token either via `--token` argument or set it as the `GITHUB_TOKEN` environment variable.");
+                    }
+                    // TODO: if cache is introduced all other files could be processed and may even be up to date
+                    break;
+                }
+            }
+            processor.Summarize();
         }
 
         private static (string fileOrFolder, Mode mode, string? githubApiToken) ParseArguments(IConfiguration configuration)
@@ -121,7 +122,9 @@ namespace GithubActionPinner
             var check = configuration["check"];
             if ((update == null && check == null) ||
                 (update != null && check != null))
+            {
                 throw new ArgumentException("Either --update or --check must be set");
+            }
 
             var mode = update != null ? Mode.Update : Mode.Check;
             var fileOrFolder = update ?? check ?? throw new InvalidProgramException("compiler not smart");

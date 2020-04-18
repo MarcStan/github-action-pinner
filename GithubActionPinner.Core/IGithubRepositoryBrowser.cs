@@ -24,7 +24,7 @@ namespace GithubActionPinner.Core
         /// <summary>
         /// For a given branch name gets the SHA of the latest commit on it.
         /// </summary>
-        Task<string> GetShaForLatestCommitAsync(string owner, string repository, string branchName, CancellationToken cancellationToken);
+        Task<string?> GetShaForLatestCommitAsync(string owner, string repository, string branchName, CancellationToken cancellationToken);
 
         /// <summary>
         /// For a tag of a given major version this will look for the latest SemVer compliant tag and return its current SHA.
