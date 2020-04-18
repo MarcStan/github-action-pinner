@@ -122,14 +122,16 @@ namespace GithubActionPinner.Core
             var (majorSha, majorCreatedAt) = await GetCommitAsync(owner, repository, majorTag.GitRef, cancellationToken).ConfigureAwait(false);
             var (LatestSha, latestCreatedAt) = await GetCommitAsync(owner, repository, latestCommitByVersion.GitRef, cancellationToken).ConfigureAwait(false);
 
-            // if both point to the same commit or the major format points to a newer commit we pick the major as refernece
             if (majorSha == LatestSha ||
                 // TODO: possibly buggy because git commit creation date can be changed
                 // however accept the edgecase as "not supported" as it would require
                 // someone to purposefully create a newer commit with an older date..
                 majorCreatedAt > latestCreatedAt)
             {
-                return (maxVersion, majorTag.Tag, majorSha);
+                // if both point to the same commit or the major format points to a newer commit we pick major
+                // Github also recommends users to point the major tag at any semver compliant latest tag
+                // so this will give the latest compatible version
+                return (majorTag.Tag, majorTag.Tag, majorSha);
             }
 
             return (maxVersion, latestCommitByVersion.Tag, LatestSha);
