@@ -63,7 +63,6 @@ namespace GithubActionPinner.Core
         /// </summary>
         public async IAsyncEnumerable<T> GetPaginatedAsync<T>(string url, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            // TODO: cache
             string? nextLink = null;
             do
             {
