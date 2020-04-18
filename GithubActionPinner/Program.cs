@@ -42,7 +42,7 @@ namespace GithubActionPinner
         {
             return new ServiceCollection()
                    .AddLogging(builder => builder.AddProvider(new ConsoleLoggerProvider()))
-                   .AddTransient<IActionConfig, ActionConfig>()
+                   .AddSingleton<IActionConfig, ActionConfig>()
                    .AddTransient<IActionParser, ActionParser>()
                    .AddSingleton(new CachedGithubApi(githubApiToken))
                    .AddTransient<WorkflowActionProcessor>()
