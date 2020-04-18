@@ -88,13 +88,15 @@ namespace GithubActionPinner
             var logger = sp.GetRequiredService<ILogger<Program>>();
             var update = mode == Mode.Update;
             var config = sp.GetRequiredService<IActionConfig>();
-            const string fileName = "GithubActionPinner.trusted";
-            string configFile = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "", fileName);
+            var exeName = Path.GetFileNameWithoutExtension(typeof(Program).Assembly.Location);
+            var fileName = $"{exeName}.trusted";
+            string configFile = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".", fileName);
             // config file is optional
             if (File.Exists(configFile))
             {
                 config.Load(configFile);
             }
+            GithubApiRatelimitExceededException? rateLimitError = null;
             foreach (var file in filesToProcess)
             {
                 try
@@ -103,14 +105,17 @@ namespace GithubActionPinner
                 }
                 catch (GithubApiRatelimitExceededException ex)
                 {
-                    logger.LogError(ex.Message);
-                    if (!ex.WasAuthenticated)
-                    {
-                        logger.LogError("For unauthenticated requests the ratelimit is rather low, consider authenticating with a personal access token: https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line to increase your limit.");
-                        logger.LogError("Pass the token either via `--token` argument or set it as the `GITHUB_TOKEN` environment variable.");
-                    }
-                    // TODO: if cache is introduced all other files could be processed and may even be up to date
-                    break;
+                    // with cache there is a small chance that everything else is already cached, so keep going
+                    rateLimitError = ex;
+                }
+            }
+            if (rateLimitError != null)
+            {
+                logger.LogError(rateLimitError.Message);
+                if (!rateLimitError.WasAuthenticated)
+                {
+                    logger.LogError("For unauthenticated requests the ratelimit is rather low, consider authenticating with a personal access token to increase your limit (https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line).");
+                    logger.LogError("Pass the token either via `--token` argument or set it as the `GITHUB_TOKEN` environment variable.");
                 }
             }
             processor.Summarize();
