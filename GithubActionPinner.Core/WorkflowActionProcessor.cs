@@ -191,6 +191,9 @@ namespace GithubActionPinner.Core
         }
 
         private static bool HasActionReference(string line)
-            => line.Trim().Contains("- uses:");
+        {
+            line = line.Trim();
+            return !line.StartsWith('#') && line.Contains("- uses:");
+        }
     }
 }

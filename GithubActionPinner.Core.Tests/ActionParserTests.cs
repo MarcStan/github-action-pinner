@@ -109,5 +109,27 @@ namespace GithubActionStats.Core.Tests
             }
             repoBrowser.VerifyNoOtherCalls();
         }
+
+        [DataTestMethod]
+        [DataRow("#  - uses: actions/foo@v1")]
+        [DataRow("#- uses: actions/foo@v2")]
+        [DataRow("  #- uses: actions/foo@v2")]
+        public async Task CommentLinesShouldBeIgnored(string reference)
+        {
+            var repoBrowser = new Mock<IGithubRepositoryBrowser>();
+            repoBrowser
+                .Setup(x => x.GetRepositoryDefaultBranchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.FromResult("nope"));
+
+            var parser = new ActionParser(repoBrowser.Object);
+            try
+            {
+                await parser.ParseActionAsync(reference, CancellationToken.None);
+                Assert.Fail();
+            }
+            catch (NotSupportedException)
+            {
+            }
+        }
     }
 }
