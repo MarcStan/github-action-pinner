@@ -113,7 +113,8 @@ namespace GithubActionPinner.Core
                 // however SHA can only be identical when both tags are lightweight and point to the same commit
                 majorTag.GitRef.Object.Sha == latestCommitByVersion.GitRef.Object.Sha)
             {
-                return (maxVersion, (majorTag ?? latestCommitByVersion).Tag, latestCommitByVersion.GitRef.Object.Sha);
+                var latestSha = await GetCommitShaAsync(owner, repository, latestCommitByVersion.GitRef, cancellationToken).ConfigureAwait(false);
+                return (maxVersion, (majorTag ?? latestCommitByVersion).Tag, latestSha);
             }
 
             // one (or both) tags may be regular tags (with their own sha)
@@ -135,6 +136,26 @@ namespace GithubActionPinner.Core
             }
 
             return (maxVersion, latestCommitByVersion.Tag, LatestSha);
+        }
+
+        private async Task<string> GetCommitShaAsync(string owner, string repository, GitRef gitRef, CancellationToken cancellationToken)
+        {
+            switch (gitRef.Object.Type)
+            {
+                case "commit":
+                    // no need to query api again
+                    return gitRef.Object.Sha;
+                case "tag":
+                    // type tag is not a lightweight tag -> it contains the link to the actual commit
+                    var tag = await GetAsync<GithubTag>(gitRef.Object.Url, cancellationToken).ConfigureAwait(false);
+                    // resolve actual commit
+                    return await GetCommitShaAsync(owner, repository, new GitRef
+                    {
+                        Object = tag.Object
+                    }, cancellationToken).ConfigureAwait(false);
+                default:
+                    throw new NotSupportedException($"Expected a tag to resolve its commit. {gitRef.Object.Type} is unuspported.");
+            }
         }
 
         private async Task<(string sha, DateTimeOffset createdAt)> GetCommitAsync(string owner, string repository, GitRef gitRef, CancellationToken cancellationToken)
