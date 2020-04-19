@@ -206,7 +206,8 @@ namespace GithubActionPinner.Core
         {
             var prefix = line.Substring(0, line.IndexOf(actionReference.ActionName));
 
-            return $"{prefix}{actionReference.ActionName}@{sha} # pin@{pinned} {actionReference.Comment}";
+            var comment = actionReference.Comment == null ? "" : $" {actionReference.Comment}";
+            return $"{prefix}{actionReference.ActionName}@{sha} # pin@{pinned}{comment}";
         }
 
         private static bool HasActionReference(string line)
