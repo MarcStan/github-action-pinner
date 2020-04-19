@@ -8,6 +8,11 @@ using System.Threading.Tasks;
 
 namespace GithubActionPinner.Core
 {
+    /// <summary>
+    /// Main logic of the pinner action.
+    /// Will scan individual files for necessary action updates and perform them if necessary.
+    /// Output results will also be logged.
+    /// </summary>
     public class WorkflowActionProcessor
     {
         private readonly LogCollector _auditLogger;
@@ -175,12 +180,26 @@ namespace GithubActionPinner.Core
         public void Summarize()
         {
             LogInformation("");
-            LogInformation("Issues:");
-            _summaryLogger.Summarize();
+            if (_summaryLogger.BufferSize > 0)
+            {
+                LogInformation("Issues:");
+                _summaryLogger.Summarize();
+            }
+            else
+            {
+                LogInformation("No issues found!");
+            }
 
             LogInformation("");
-            LogInformation("Audit summary:");
-            _auditLogger.Summarize();
+            if (_auditLogger.BufferSize > 0)
+            {
+                LogInformation("Audit summary:");
+                _auditLogger.Summarize();
+            }
+            else
+            {
+                LogInformation("Nothing to audit!");
+            }
         }
 
         private string UpdateLine(string line, ActionReference actionReference, string sha, string pinned)

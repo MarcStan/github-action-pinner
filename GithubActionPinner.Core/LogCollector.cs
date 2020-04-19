@@ -12,6 +12,8 @@ namespace GithubActionPinner.Core
         public LogCollector(ILogger logger)
             => _logger = logger;
 
+        public int BufferSize => _messages.Count;
+
         public void LogWarning(string category, string message)
         {
             _messages[category.ToLowerInvariant()] = (LogLevel.Warning, message);
