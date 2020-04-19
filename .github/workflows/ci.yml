@@ -4,7 +4,7 @@ on:
       - master
 
 env:
-  SemVer: 1.0.0
+  SemVer: 1.0.1
   Project: GithubActionPinner
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
 
