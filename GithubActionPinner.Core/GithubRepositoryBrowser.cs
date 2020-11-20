@@ -64,12 +64,12 @@ namespace GithubActionPinner.Core
             return await GetLargestSemVerCompliantTagAsync(owner, repository, version, cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task<T> GetAsync<T>(string url, CancellationToken cancellationToken)
+        private async Task<T> GetAsync<T>(string url, CancellationToken cancellationToken) where T : new()
         {
             var response = await _cache.GetAsync(url, cancellationToken).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
-            return await JsonSerializer.DeserializeAsync<T>(response.Content).ConfigureAwait(false);
+            return await JsonSerializer.DeserializeAsync<T>(response.Content).ConfigureAwait(false) ?? new T();
         }
 
         private async Task<(string latestTag, string latestSemVerCompliantTag, string latestSemVerCompliantSha)?> GetLargestSemVerCompliantTagAsync(string owner, string repository, Version currentVersion, CancellationToken cancellationToken)

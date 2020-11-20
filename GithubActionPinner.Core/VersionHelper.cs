@@ -18,7 +18,7 @@ namespace GithubActionPinner.Core
                 version = new Version(major, 0);
                 return true;
             }
-            return Version.TryParse(text.Substring(1), out version);
+            return Version.TryParse(text.Substring(1), out version!);
         }
     }
 }

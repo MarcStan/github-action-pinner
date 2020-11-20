@@ -71,7 +71,7 @@ namespace GithubActionPinner.Core
                 response.EnsureSuccessStatusCode();
                 var results = await JsonSerializer.DeserializeAsync<T[]>(
                     response.Content,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                    cancellationToken: cancellationToken).ConfigureAwait(false) ?? new T[0];
 
                 foreach (var r in results)
                     yield return r;
@@ -107,7 +107,7 @@ namespace GithubActionPinner.Core
                     if (nextLink != null)
                     {
                         url = nextLink;
-                        if (url.StartsWith(_httpClient.BaseAddress.ToString(), StringComparison.OrdinalIgnoreCase))
+                        if (url.StartsWith(_httpClient.BaseAddress!.ToString(), StringComparison.OrdinalIgnoreCase))
                             url = url.Substring(_httpClient.BaseAddress.ToString().Length);
                     }
                 }
